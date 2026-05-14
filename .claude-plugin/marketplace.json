@@ -1,0 +1,14 @@
+{
+  "name": "vestmap-app",
+  "owner": {
+    "name": "VestMap"
+  },
+  "description": "VestMap plugin marketplace — property data and Offering Memorandum tools for Claude Code.",
+  "plugins": [
+    {
+      "name": "vestmap",
+      "source": "./plugins/vestmap",
+      "description": "VestMap property data and Offering Memorandum page generation. Bundles two skills: the base vestmap data skill and the vestmap-om-pages renderer."
+    }
+  ]
+}
