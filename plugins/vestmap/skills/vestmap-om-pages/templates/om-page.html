@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ADDRESS}}</title>
+
+<!-- Leaflet for the hero map (the one external dependency allowed per layout.md §8) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+<style>
+  /* -------- Tokens (layout.md §4, §5, §6) ---------------------------- */
+  :root {
+    --ink:        #141414;
+    --muted:      #5E5E5E;
+    --line:       #E4E4E4;
+    --surface:    #FFFFFF;
+    --surface-alt:#F6F6F3;
+    --accent:     #2C5F4E;
+    --caution:    #A84532;
+    --neutral-chip:#EDEDE8;
+    --chip-pos:   #E6EFEA;
+    --chip-pos-ink:#1E4D3E;
+    --chip-neg:   #F4E4E0;
+    --chip-neg-ink:#7A2D1F;
+
+    --font-sans: "Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+
+    --pad-page: 0.4in;
+    --gap-section: 0.22in;
+    --gap-row: 0.08in;
+  }
+
+  /* -------- Page setup ------------------------------------------------- */
+  @page { size: Letter; margin: var(--pad-page); }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 11pt;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page {
+    width: 8.5in;
+    min-height: 11in;
+    box-sizing: border-box;
+    padding: var(--pad-page);
+    page-break-after: always;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .page:last-of-type { page-break-after: auto; }
+  .page > * { max-width: 100%; box-sizing: border-box; }
+
+  /* -------- Page-header strip (layout.md §Styling) --------------------- */
+  .page-header {
+    margin: calc(-1 * var(--pad-page)) calc(-1 * var(--pad-page)) 0;
+    padding: 0.42in var(--pad-page) 0.32in;
+    background: var(--accent);
+    color: #FFFFFF;
+  }
+  .page-header__label {
+    font-size: 28pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.05;
+  }
+  .page-header__address {
+    font-size: 13pt;
+    font-weight: 400;
+    opacity: 0.85;
+    margin-top: 0.10in;
+    line-height: 1.3;
+  }
+
+  /* -------- Summary/map row (two-up) ----------------------------------
+     When the map div is removed (geocoding failed), the script adds
+     `.no-map` to .summary-row so the summary card spans the full width
+     instead of leaving an empty right column (the page would otherwise
+     read as "off center"). See layout.md §3.1.                         */
+  .summary-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.24in;
+    margin-top: 0.22in;
+  }
+  .summary-row.no-map { grid-template-columns: 1fr; }
+  .summary-card {
+    background: var(--surface-alt);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+    padding: 14pt 12pt;
+    min-width: 0;
+  }
+  .summary-card__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 10pt;
+  }
+  .summary-card__row + .summary-card__row { border-top: 1px solid var(--line); }
+  .summary-card__row .label {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 9pt;
+  }
+  .summary-card__row .value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .hero__map {
+    width: 100%;
+    height: 2.6in;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+
+  /* -------- Context band — 3 big-number callouts (left-accent-bar) ----- */
+  .context-band {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.15in;
+    margin: 0.22in 0;
+  }
+  .context-callout {
+    background: var(--surface-alt);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+    padding: 14pt 12pt;
+  }
+  .context-callout .label {
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .context-callout .value {
+    font-size: 22pt;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+    margin-top: 0.05in;
+  }
+  .context-callout .value small {
+    font-size: 11pt;
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  /* -------- Sections (§3) ---------------------------------------------- */
+  .section {
+    margin-top: var(--gap-section);
+  }
+  .section__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 0 4px 0;
+    margin-bottom: 0.08in;
+    position: relative;
+  }
+  .section__header::after {
+    content: "";
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 40%;
+    height: 2px;
+    background: var(--accent);
+  }
+  .section__header h2 {
+    font-size: 11pt;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .scale-header {
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* -------- 4-col comparison row (§2, THE core pattern) ---------------- */
+  .cmp-table { width: 100%; border-collapse: collapse; }
+  .cmp-table col.label { width: 18%; }
+  .cmp-table col.cell  { width: 20.5%; }
+
+  .cmp-row:nth-child(even) { background: var(--surface-alt); }
+
+  .cmp-row__label {
+    padding: 10px 8px 6px 0;
+    font-size: 10pt;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    vertical-align: top;
+  }
+  .cmp-cell {
+    padding: 10px 6px 8px 6px;
+    vertical-align: top;
+    text-align: right;
+  }
+  .cmp-cell__value {
+    font-size: 14pt;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  /* Empty cells are fully hidden — NEVER show "—" or "N/A" as placeholder (R9). */
+  .cmp-cell__value--empty { display: none; }
+
+  .cmp-cell__chips {
+    margin-top: 3px;
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 9pt;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    background: var(--neutral-chip);
+    color: var(--muted);
+  }
+
+  /* Column headers for the scale (Block · Tract · ZIP · County) */
+  .cmp-header {
+    display: grid;
+    grid-template-columns: 18% repeat(4, 20.5%);
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cmp-header div { text-align: right; padding: 0 6px; }
+  .cmp-header div:first-child { text-align: left; padding: 0; }
+
+  /* -------- Workforce occupation stacked bars (§3.4) ------------------- */
+  .occ-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 0.12in; }
+  .occ-bar-row {
+    display: grid;
+    grid-template-columns: 0.9in 1fr;
+    gap: 10px;
+    align-items: center;
+    font-size: 9pt;
+  }
+  .occ-bar {
+    display: flex;
+    height: 14px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface-alt);
+  }
+  .occ-bar__seg {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8pt;
+    color: #fff;
+    font-weight: 500;
+    min-width: 0;
+  }
+  /* Monochrome ramp of --accent for segments */
+  .occ-bar__seg--1 { background: #3B7F6A; }
+  .occ-bar__seg--2 { background: #2C5F4E; }
+  .occ-bar__seg--3 { background: #21493B; }
+  .occ-bar__seg--4 { background: #15332A; }
+  .occ-bar__seg--muted { background: var(--neutral-chip); color: var(--muted); }
+  /* Hide segment labels in narrow segments to prevent overlap (layout.md §3.4).
+     Render-time: add `.is-narrow` to any `.occ-bar__seg` whose pct < 8. */
+  .occ-bar__seg.is-narrow .occ-bar__label { display: none; }
+  .occ-bar__label { white-space: nowrap; }
+
+  /* -------- Safety section (Block-Group raw counts only) -------------- */
+  .block-crime {
+    background: var(--surface-alt);
+    border-radius: 6px;
+    padding: 0.12in;
+  }
+  .block-crime h3 {
+    font-size: 10pt;
+    margin: 0 0 0.08in 0;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .block-crime__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .block-crime__cell {
+    background: #FFFFFF;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 8px;
+  }
+  .block-crime__cell .label {
+    font-size: 8pt;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .block-crime__cell .value {
+    font-size: 14pt;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  .block-crime__cell--empty { display: none; }
+
+  /* -------- Footer (§3.6) --------------------------------------------- */
+  .om-footer {
+    margin-top: 0.3in;
+    padding-top: 0.10in;
+    border-top: 1px solid var(--line);
+    font-size: 9pt;
+    color: var(--muted);
+    line-height: 1.5;
+    opacity: 0.85;
+  }
+  .om-footer strong { color: var(--ink); font-weight: 600; }
+
+  /* -------- Print ------------------------------------------------------ */
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; margin: 0; }
+  }
+
+  /* -------- Utility ---------------------------------------------------- */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- =========================================================================
+     PAGE 1 · Page-header strip + summary/map + context band
+     Fill instructions (layout.md §3.1, §Styling):
+     - {{ADDRESS}}, {{CITY_STATE}}, {{COUNTY}}, {{ZIP}}, {{MSA_NAME}}
+     - Map: call initHeroMap({{LAT}}, {{LNG}}) at the end
+     ========================================================================= -->
+<section class="page">
+
+  <div class="page-header">
+    <h1 class="page-header__label">Location Brief</h1>
+    <div class="page-header__address">{{ADDRESS}}</div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="summary-card__row">
+        <span class="label">Locality</span>
+        <span class="value">{{CITY_STATE}}</span>
+      </div>
+      <div class="summary-card__row">
+        <span class="label">County</span>
+        <span class="value">{{COUNTY}}</span>
+      </div>
+      <div class="summary-card__row">
+        <span class="label">ZIP</span>
+        <span class="value">{{ZIP}}</span>
+      </div>
+      <div class="summary-card__row">
+        <span class="label">MSA</span>
+        <span class="value">{{MSA_NAME}}</span>
+      </div>
+    </div>
+
+    <div class="hero__map" id="om-hero-map"><!-- Leaflet mounts here (default-on) --></div>
+  </div>
+
+  <!-- Context band: 3 big-number callouts per layout.md §3.1
+       Fixed slot order:
+         1. Median HHI at Block  (scale label: "BLOCK")
+         2. Population growth % at ZIP (scale label: "ZIP, 5-YR CAGR")
+         3. MSA name as-is (scale label: "MSA")
+       Do NOT substitute different metrics. If Block HHI missed, drop the whole
+       callout cell (omit the container div) — do NOT fall back to ZIP HHI. -->
+  <div class="context-band">
+    <div class="context-callout">
+      <div class="label">Median HHI · Block</div>
+      <div class="value">${{HHI_BLOCK}}</div>
+    </div>
+    <div class="context-callout">
+      <div class="label">Pop Growth · ZIP, 5-yr CAGR</div>
+      <div class="value">{{POPGR_ZIP}}%</div>
+    </div>
+    <div class="context-callout">
+      <div class="label">MSA</div>
+      <div class="value" style="font-size:16pt;font-weight:600;line-height:1.2;">{{MSA_NAME}}</div>
+    </div>
+  </div>
+
+</section>
+
+<!-- =========================================================================
+     PAGE 2 · Default comparison sections
+     Pattern for every section below: layout.md §2
+     - <div class="cmp-header"> establishes the 4 scale columns
+     - Each <tr class="cmp-row"> is one metric
+     - Each cmp-cell holds a .cmp-cell__value + .cmp-cell__chips (deltas)
+     - Chips: first cell NEVER has chips; cells 2-4 show "Δ vs left neighbor"
+     - If a value is null: add class .cmp-cell__value--empty AND omit chips
+     - If a whole row has <2 non-null cells: REMOVE the entire <tr>
+     - If a whole section has <2 rows left: REMOVE the entire <section>
+     ========================================================================= -->
+<section class="page">
+
+  <!-- ========== Population Profile ====================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Population Profile</h2>
+      <span class="scale-header">Block · Tract · ZIP · County</span>
+    </div>
+
+    <div class="cmp-header">
+      <div>Metric</div>
+      <div>Block</div>
+      <div>Tract</div>
+      <div>ZIP</div>
+      <div>County</div>
+    </div>
+
+    <table class="cmp-table">
+      <colgroup>
+        <col class="label"/><col class="cell"/><col class="cell"/><col class="cell"/><col class="cell"/>
+      </colgroup>
+      <tbody>
+
+        <!-- Total population -->
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Total population</td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POP_BLOCK}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POP_ZIP}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POP_CITY}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POP_COUNTY}}</div>
+          </td>
+        </tr>
+
+        <!-- Median age -->
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Median age</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{MEDAGE_BLOCK}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{MEDAGE_ZIP}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{MEDAGE_CITY}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{MEDAGE_COUNTY}}</div>
+          </td>
+        </tr>
+
+        <!-- Population density -->
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Density (/sq mi)</td>
+          <td class="cmp-cell"><div class="cmp-cell__value cmp-cell__value--empty"></div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{DENS_ZIP}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{DENS_CITY}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{DENS_COUNTY}}</div>
+          </td>
+        </tr>
+
+        <!-- 5-yr pop growth -->
+        <tr class="cmp-row">
+          <td class="cmp-row__label">5-yr pop growth</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{POPGR_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POPGR_ZIP}}%</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POPGR_CITY}}%</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{POPGR_COUNTY}}%</div>
+          </td>
+        </tr>
+
+        <!-- Avg HH size -->
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Avg HH size</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{HHSIZE_BLOCK}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHSIZE_ZIP}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHSIZE_CITY}}</div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHSIZE_COUNTY}}</div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Income Profile ========================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Income Profile</h2>
+      <span class="scale-header">Block · Tract · ZIP · County</span>
+    </div>
+
+    <div class="cmp-header">
+      <div>Metric</div><div>Block</div><div>Tract</div><div>ZIP</div><div>County</div>
+    </div>
+
+    <table class="cmp-table">
+      <colgroup>
+        <col class="label"/><col class="cell"/><col class="cell"/><col class="cell"/><col class="cell"/>
+      </colgroup>
+      <tbody>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Median HHI</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HHI_BLOCK}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HHI_ZIP}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHI_ZIP_VS_BLOCK_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HHI_CITY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHI_CITY_VS_ZIP_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HHI_COUNTY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHI_COUNTY_VS_CITY_PCT}}</span></div>
+          </td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">HHI 2029 (forecast)</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HHI29_BLOCK}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HHI29_ZIP}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HHI29_CITY}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HHI29_COUNTY}}</div></td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">5-yr HHI growth</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{HHIGR_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHIGR_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHIGR_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHIGR_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHIGR_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HHIGR_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HHIGR_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Per capita income</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{PCI_BLOCK}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{PCI_ZIP}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{PCI_CITY}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{PCI_COUNTY}}</div></td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Unemployment rate</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{UNEMP_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{UNEMP_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{UNEMP_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{UNEMP_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{UNEMP_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{UNEMP_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{UNEMP_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Housing Values ========================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Housing Values</h2>
+      <span class="scale-header">Block · Tract · ZIP · County</span>
+    </div>
+
+    <div class="cmp-header">
+      <div>Metric</div><div>Block</div><div>Tract</div><div>ZIP</div><div>County</div>
+    </div>
+
+    <table class="cmp-table">
+      <colgroup><col class="label"/><col class="cell"/><col class="cell"/><col class="cell"/><col class="cell"/></colgroup>
+      <tbody>
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Median home value</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HV_BLOCK}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HV_ZIP}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HV_ZIP_VS_BLOCK_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HV_CITY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HV_CITY_VS_ZIP_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{HV_COUNTY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HV_COUNTY_VS_CITY_PCT}}</span></div>
+          </td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">HV 2029 (forecast)</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HV29_BLOCK}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HV29_ZIP}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HV29_CITY}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{HV29_COUNTY}}</div></td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">5-yr HV growth</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{HVGR_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HVGR_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HVGR_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HVGR_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HVGR_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{HVGR_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{HVGR_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Rental Market =========================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Rental Market</h2>
+      <span class="scale-header">Block · Tract · ZIP · County</span>
+    </div>
+
+    <div class="cmp-header">
+      <div>Metric</div><div>Block</div><div>Tract</div><div>ZIP</div><div>County</div>
+    </div>
+
+    <table class="cmp-table">
+      <colgroup><col class="label"/><col class="cell"/><col class="cell"/><col class="cell"/><col class="cell"/></colgroup>
+      <tbody>
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Median rent</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">${{RENT_BLOCK}}</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{RENT_ZIP}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RENT_ZIP_VS_BLOCK_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{RENT_CITY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RENT_CITY_VS_ZIP_PCT}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">${{RENT_COUNTY}}</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RENT_COUNTY_VS_CITY_PCT}}</span></div>
+          </td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Renter units</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{RENTERS_BLOCK}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{RENTERS_ZIP}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{RENTERS_CITY}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{RENTERS_COUNTY}}</div></td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Owner units</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{OWNERS_BLOCK}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{OWNERS_ZIP}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{OWNERS_CITY}}</div></td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{OWNERS_COUNTY}}</div></td>
+        </tr>
+
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Renter share</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{RSHARE_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{RSHARE_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RSHARE_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{RSHARE_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RSHARE_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{RSHARE_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{RSHARE_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Workforce =============================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Workforce</h2>
+      <span class="scale-header">Block · Tract · ZIP · County</span>
+    </div>
+
+    <!-- Collar share 4-col strip (§3.4 top) -->
+    <div class="cmp-header">
+      <div>Share</div><div>Block</div><div>Tract</div><div>ZIP</div><div>County</div>
+    </div>
+    <table class="cmp-table">
+      <colgroup><col class="label"/><col class="cell"/><col class="cell"/><col class="cell"/><col class="cell"/></colgroup>
+      <tbody>
+        <tr class="cmp-row">
+          <td class="cmp-row__label">White-collar</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{WC_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{WC_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{WC_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{WC_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{WC_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{WC_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{WC_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+        <tr class="cmp-row">
+          <td class="cmp-row__label">Blue-collar</td>
+          <td class="cmp-cell"><div class="cmp-cell__value">{{BC_BLOCK}}%</div></td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{BC_ZIP}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{BC_ZIP_VS_BLOCK_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{BC_CITY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{BC_CITY_VS_ZIP_PP}}</span></div>
+          </td>
+          <td class="cmp-cell">
+            <div class="cmp-cell__value">{{BC_COUNTY}}%</div>
+            <div class="cmp-cell__chips"><span class="chip">{{BC_COUNTY_VS_CITY_PP}}</span></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Occupation stacked bars per scale (Mgmt / Sales / Prod / Cons), §3.4 -->
+    <div class="occ-bars">
+      <div class="occ-bar-row">
+        <span class="label" style="color:var(--muted);font-size:9pt;text-transform:uppercase;letter-spacing:0.04em;">Block</span>
+        <div class="occ-bar">
+          <div class="occ-bar__seg occ-bar__seg--1" style="flex-basis: {{OCC_MGMT_BLOCK_PCT}}%"><span class="occ-bar__label">Mgmt {{OCC_MGMT_BLOCK_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--2" style="flex-basis: {{OCC_SALE_BLOCK_PCT}}%"><span class="occ-bar__label">Sales {{OCC_SALE_BLOCK_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--3" style="flex-basis: {{OCC_PROD_BLOCK_PCT}}%"><span class="occ-bar__label">Prod {{OCC_PROD_BLOCK_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--4" style="flex-basis: {{OCC_CONS_BLOCK_PCT}}%"><span class="occ-bar__label">Cons {{OCC_CONS_BLOCK_PCT}}%</span></div>
+        </div>
+      </div>
+      <div class="occ-bar-row">
+        <span class="label" style="color:var(--muted);font-size:9pt;text-transform:uppercase;letter-spacing:0.04em;">Tract</span>
+        <div class="occ-bar">
+          <div class="occ-bar__seg occ-bar__seg--1" style="flex-basis: {{OCC_MGMT_ZIP_PCT}}%"><span class="occ-bar__label">Mgmt {{OCC_MGMT_ZIP_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--2" style="flex-basis: {{OCC_SALE_ZIP_PCT}}%"><span class="occ-bar__label">Sales {{OCC_SALE_ZIP_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--3" style="flex-basis: {{OCC_PROD_ZIP_PCT}}%"><span class="occ-bar__label">Prod {{OCC_PROD_ZIP_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--4" style="flex-basis: {{OCC_CONS_ZIP_PCT}}%"><span class="occ-bar__label">Cons {{OCC_CONS_ZIP_PCT}}%</span></div>
+        </div>
+      </div>
+      <div class="occ-bar-row">
+        <span class="label" style="color:var(--muted);font-size:9pt;text-transform:uppercase;letter-spacing:0.04em;">ZIP</span>
+        <div class="occ-bar">
+          <div class="occ-bar__seg occ-bar__seg--1" style="flex-basis: {{OCC_MGMT_CITY_PCT}}%"><span class="occ-bar__label">Mgmt {{OCC_MGMT_CITY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--2" style="flex-basis: {{OCC_SALE_CITY_PCT}}%"><span class="occ-bar__label">Sales {{OCC_SALE_CITY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--3" style="flex-basis: {{OCC_PROD_CITY_PCT}}%"><span class="occ-bar__label">Prod {{OCC_PROD_CITY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--4" style="flex-basis: {{OCC_CONS_CITY_PCT}}%"><span class="occ-bar__label">Cons {{OCC_CONS_CITY_PCT}}%</span></div>
+        </div>
+      </div>
+      <div class="occ-bar-row">
+        <span class="label" style="color:var(--muted);font-size:9pt;text-transform:uppercase;letter-spacing:0.04em;">County</span>
+        <div class="occ-bar">
+          <div class="occ-bar__seg occ-bar__seg--1" style="flex-basis: {{OCC_MGMT_COUNTY_PCT}}%"><span class="occ-bar__label">Mgmt {{OCC_MGMT_COUNTY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--2" style="flex-basis: {{OCC_SALE_COUNTY_PCT}}%"><span class="occ-bar__label">Sales {{OCC_SALE_COUNTY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--3" style="flex-basis: {{OCC_PROD_COUNTY_PCT}}%"><span class="occ-bar__label">Prod {{OCC_PROD_COUNTY_PCT}}%</span></div>
+          <div class="occ-bar__seg occ-bar__seg--4" style="flex-basis: {{OCC_CONS_COUNTY_PCT}}%"><span class="occ-bar__label">Cons {{OCC_CONS_COUNTY_PCT}}%</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Safety / Crime ========================================== -->
+  <section class="section">
+    <div class="section__header">
+      <h2>Safety</h2>
+      <span class="scale-header">Block Group · offense counts</span>
+    </div>
+
+    <div class="block-crime">
+      <h3>Block Group · 2024 offense counts</h3>
+      <div class="block-crime__grid">
+        <div class="block-crime__cell"><div class="label">Total</div><div class="value">{{CRMCYTOTC}}</div></div>
+        <div class="block-crime__cell"><div class="label">Property</div><div class="value">{{CRMCYPROC}}</div></div>
+        <div class="block-crime__cell"><div class="label">Personal</div><div class="value">{{CRMCYPERC}}</div></div>
+        <div class="block-crime__cell"><div class="label">Murder</div><div class="value">{{CRMCYMURD}}</div></div>
+        <div class="block-crime__cell"><div class="label">Rape</div><div class="value">{{CRMCYRAPE}}</div></div>
+        <div class="block-crime__cell"><div class="label">Robbery</div><div class="value">{{CRMCYROBB}}</div></div>
+        <div class="block-crime__cell"><div class="label">Assault</div><div class="value">{{CRMCYASST}}</div></div>
+        <div class="block-crime__cell"><div class="label">Burglary</div><div class="value">{{CRMCYBURG}}</div></div>
+        <div class="block-crime__cell"><div class="label">Larceny</div><div class="value">{{CRMCYLARC}}</div></div>
+      </div>
+      <div style="margin-top:0.10in;font-size:9pt;color:var(--muted);">
+        Per 1,000 residents (Block pop {{POP_BLOCK}}): <strong>{{CRIME_PER_1K}}</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Footer ==================================================
+       MINIMAL footer. NEVER list missing fields, failed calls, R13 divergences,
+       "no data available" notes, "dropped", "omitted", or which modules were
+       excluded. The user explicitly forbids surfacing failure information in
+       the rendered output.
+       Allowed contents: data provenance + timestamp. That's it. -->
+  <footer class="om-footer">
+    Data: VestMap &middot; Generated {{GENERATED_AT}}.
+  </footer>
+
+</section>
+
+<!-- =========================================================================
+     PAGE 3+ · Optional modules (appended on request only)
+     See references/layout.md §7 and references/data-spec.md "Optional Modules"
+     Uncomment / fill only if the user opted in.
+     ========================================================================= -->
+
+<!--
+<section class="page">
+  <section class="section">
+    <div class="section__header">
+      <h2>Natural Hazard Risk (FEMA NRI · Tract)</h2>
+      <span class="scale-header">Tract-level only</span>
+    </div>
+    RISK MODULE BODY GOES HERE per layout.md §7 Risk
+  </section>
+</section>
+-->
+
+<script>
+  // Hero map — lat/lng are sourced EXCLUSIVELY through VestMap MCP per
+  // `SKILL.md §O8a`: primary path is the `get_section_data` response payload,
+  // fallback is one `search_real_estate_data("geocode")` discovery. No external
+  // geocoders (Nominatim, geocode.arcgis.com, Google, Mapbox), no urllib /
+  // requests / curl / web_fetch / fetch. If both VestMap paths return nothing,
+  // hand the template empty {{LAT}}/{{LNG}} — this script then removes the
+  // map div, adds `.no-map` to `.summary-row`, and signals `mapReady` so the
+  // PDF export doesn't stall.
+  //
+  // Headless-Chrome PDF capture timing:
+  //   The Leaflet tile layer fetches PNGs from ArcGIS over the network. Chrome's
+  //   --virtual-time-budget only advances JS timers; it does NOT wait for real
+  //   network responses, so a naive map init prints a blank tile grid.
+  //   We mark the document with `data-map-ready="true"` (and add `.map-ready` to
+  //   <html>) once the initial visible tiles have rendered — the PDF export
+  //   command waits for this attribute before printing. See layout.md §9.
+  //   If the map div is missing OR coords are bad, we mark ready immediately so
+  //   the export doesn't stall.
+  (function () {
+    var root = document.documentElement;
+    function markReady() {
+      if (root.dataset.mapReady === 'true') return;
+      root.dataset.mapReady = 'true';
+      root.classList.add('map-ready');
+    }
+    // Hard ceiling — never block the print past this point even if a tile hangs.
+    var FAILSAFE_MS = 12000;
+    setTimeout(markReady, FAILSAFE_MS);
+
+    window.addEventListener('load', function () {
+      var el = document.getElementById('om-hero-map');
+      if (!el) { markReady(); return; }
+      var lat = parseFloat('{{LAT}}');
+      var lng = parseFloat('{{LNG}}');
+      if (isNaN(lat) || isNaN(lng)) {
+        // Geocoding failed — drop the map cell and collapse the row to a single
+        // column so the summary card spans full width (prevents off-center page).
+        var row = el.closest('.summary-row');
+        if (row) row.classList.add('no-map');
+        el.parentNode.removeChild(el);
+        markReady();
+        return;
+      }
+      if (typeof L === 'undefined') { markReady(); return; }
+      var map = L.map('om-hero-map', {
+        scrollWheelZoom: false,
+        dragging: false,
+        zoomControl: false,
+        fadeAnimation: false,
+        zoomAnimation: false
+      }).setView([lat, lng], 13);
+      var tiles = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        { attribution: 'Tiles &copy; Esri', maxZoom: 19, crossOrigin: true }
+      ).addTo(map);
+      L.marker([lat, lng]).addTo(map);
+      tiles.on('load', function () {
+        // Give the compositor one frame to paint the freshly-loaded tiles
+        // before signaling ready.
+        requestAnimationFrame(function () { requestAnimationFrame(markReady); });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

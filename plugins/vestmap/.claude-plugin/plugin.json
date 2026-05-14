@@ -1,0 +1,17 @@
+{
+  "name": "vestmap",
+  "version": "1.0.0",
+  "description": "VestMap property data and Offering Memorandum tools. Includes the 'vestmap' skill (US property & demographics Q&A via the VestMap MCP server) and the 'vestmap-om-pages' skill (renders Offering Memorandum PDF/HTML pages, building on the base skill).",
+  "author": {
+    "name": "VestMap"
+  },
+  "homepage": "https://github.com/VestMap-App/marketplace",
+  "repository": "https://github.com/VestMap-App/marketplace",
+  "keywords": [
+    "vestmap",
+    "real-estate",
+    "property-data",
+    "offering-memorandum",
+    "mcp"
+  ]
+}
