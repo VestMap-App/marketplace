@@ -1,0 +1,23 @@
+{
+  "name": "rental-analyzer",
+  "version": "0.1.0",
+  "description": "Rental Property Analyzer — turn a rent roll + T12 + loan terms into an investor-grade pro forma. Produces an editable Excel model (Current vs. Proforma, NOI, cap rate, DSCR, cash-on-cash, loan amortization, multi-year projection) and a polished PDF report with KPI dashboard and charts. Standalone; no API or MCP required.",
+  "author": {
+    "name": "VestMap"
+  },
+  "homepage": "https://github.com/VestMap-App/marketplace",
+  "repository": "https://github.com/VestMap-App/marketplace",
+  "keywords": [
+    "real-estate",
+    "pro-forma",
+    "rental-property",
+    "underwriting",
+    "cash-flow",
+    "cap-rate",
+    "noi",
+    "dscr",
+    "multifamily",
+    "rent-roll",
+    "t12"
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "property": {
+    "address": "6331 N Wyandotte St",
+    "property_type": "Fourplex",
+    "units": 4,
+    "analysis_date": "2026-05-20"
+  },
+  "rent_roll": [
+    { "unit": "6631", "type": "2 bd 1 ba", "current_rent": 995,  "market_rent": 1095, "status": "occupied" },
+    { "unit": "6633", "type": "2 bd 1 ba", "current_rent": 1050, "market_rent": 1050, "status": "occupied", "notes": "just finished make ready" },
+    { "unit": "6635", "type": "2 bd 1 ba", "current_rent": 1025, "market_rent": 1095, "status": "occupied" },
+    { "unit": "6637", "type": "2 bd 1 ba", "current_rent": 1000, "market_rent": 1095, "status": "occupied" }
+  ],
+  "income": {
+    "rental_income": { "current": 46176, "proforma": null },
+    "current_vacancy_loss": 0,
+    "other_income": [
+      { "label": "Utility Fees", "current": 0,   "proforma": 1200 },
+      { "label": "Pet Rent",     "current": 150, "proforma": 840 }
+    ]
+  },
+  "expenses": {
+    "management":          { "current": 3562.16 },
+    "property_taxes":      { "current": 4070, "proforma": 4070 },
+    "insurance":           { "current": 2423, "proforma": 2423 },
+    "water_sewer":         { "current": 0, "proforma": 0 },
+    "trash":               { "current": 1708.58, "proforma": 1708.58 },
+    "landscaping":         { "current": 810, "proforma": 810 },
+    "repairs_maintenance": { "current": 2316.30 },
+    "other": [
+      { "label": "Lease Up Fees", "current": 1768.75, "proforma": 0 }
+    ]
+  },
+  "financing": {
+    "purchase_price": 499000,
+    "ltv": 0.75,
+    "loan_amount": 374250,
+    "interest_rate": 0.065,
+    "amortization_years": 30,
+    "interest_only_months": 0,
+    "closing_costs": 0,
+    "repair_costs": 0,
+    "loan_fees": 0
+  },
+  "assumptions": {
+    "vacancy_rate": 0.05,
+    "management_pct": 0.08,
+    "repairs_pct": 0.05,
+    "income_growth": 0.02,
+    "expense_growth": 0.02,
+    "appreciation": 0.03,
+    "projection_years": [1, 2, 5, 10, 15, 20, 30]
+  },
+  "notes": {
+    "management": "actuals; proforma 8% of EGI",
+    "water_sewer": "submetered, tenants pay",
+    "repairs_maintenance": "assumed 5% of EGI"
+  },
+  "data_completeness": { "tier": 1, "missing": [], "flags": [] }
+}

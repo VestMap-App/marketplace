@@ -4,6 +4,11 @@ Bring VestMap's nationwide location intelligence into Claude Code. Install once 
 get two skills: ask Claude anything about a US address, and generate polished Offering
 Memorandum pages — all grounded in live VestMap data.
 
+> This marketplace also ships a second, **standalone** plugin —
+> **[Rental Property Analyzer](#rental-property-analyzer)** — that turns a rent roll + T12 into an
+> investor-grade pro forma (editable Excel **and** polished PDF). It needs no VestMap account, API,
+> or MCP.
+
 ## What you get
 
 Installing the **VestMap** plugin adds two skills to Claude Code:
@@ -142,6 +147,65 @@ That's the whole release. Users with auto-update on (the default in the instruct
 above) pick it up at their next session; web/cloud sessions get it immediately; anyone
 else sees the "update available" notice. Optionally run `claude plugin tag` from the
 plugin folder to create a `vestmap--v<version>` git tag for the release.
+
+## Rental Property Analyzer
+
+A **standalone** plugin (`rental-analyzer`) that turns a property's **rent roll + T12 +
+loan/purchase terms** into an investor-grade pro forma — delivered as **both** an editable Excel
+model and a polished PDF report. No VestMap account, API, or MCP required.
+
+It produces:
+
+- **An editable Excel workbook** — `Current` vs. `Proforma` columns with itemized income and
+  expenses, NOI, financing, cap rate, DSCR, cash-on-cash, free cash flow per door, a live loan
+  amortization sheet, and a multi-year projection. Change any assumption and the whole model
+  recalculates.
+- **A polished PDF report** — a KPI dashboard, income/expense pie charts, a cash-flow projection
+  chart, the Current-vs-Proforma table, a financing summary, and a long-term equity/value page.
+
+### Install it
+
+Terminal:
+
+```bash
+claude plugin marketplace add VestMap-App/marketplace
+claude plugin install rental-analyzer@vestmap-app
+```
+
+Or merge this into your project's `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "vestmap-app": {
+      "source": { "source": "github", "repo": "VestMap-App/marketplace" },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "rental-analyzer@vestmap-app": true
+  }
+}
+```
+
+### Using it
+
+Attach your rent roll and T12 (PDF, Excel, or CSV — any brokerage format) and ask:
+
+- *"Analyze this rental property — here's the rent roll and T12."*
+- *"Build me a pro forma for this fourplex at a $499k purchase price, 75% LTV, 6.5% / 30-yr."*
+- *"What's the cap rate, DSCR, and cash-on-cash on this deal?"*
+
+Don't have the documents? The skill walks you through getting the rent roll and T12 from the listing
+broker (who almost always has them), or collects a smaller set of numbers and builds a best-effort
+model that clearly flags what's still needed.
+
+To trigger it explicitly: `/rental-analyzer:rental-property-analyzer`.
+
+### Requirements
+
+Python 3 with `openpyxl` (Excel) and `matplotlib` (PDF charts). The skill installs them on demand if
+they're missing — no browser or office suite needed.
 
 ## About VestMap
 
