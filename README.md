@@ -30,20 +30,23 @@ You'll need three things:
 
 ## Install it
 
-Use the section that matches **how you run Claude Code**. Quick key for the commands
-below: anything starting with `/` works **only inside a terminal `claude` session**;
-anything starting with `claude` runs in **any terminal**; the **desktop and web apps**
-use a small settings file.
+Two ways — pick one.
 
-### Desktop app or web (claude.ai/code)
+### 1. Terminal
 
-The desktop and web apps **don't have the `/plugin` command** — typing it does nothing.
-Instead you point Claude Code at VestMap with a settings file, and it loads automatically.
+```bash
+claude plugin marketplace add VestMap-App/marketplace
+claude plugin install vestmap@vestmap-app
+```
 
-Create (or edit) **`.claude/settings.json`** in the project or folder you're working in,
-with exactly this:
+### 2. Ask Claude to do it
 
-```json
+Paste this to Claude in **Claude Code** (the desktop app, the web app, or a terminal
+session):
+
+```
+Set up the VestMap Claude Code plugin for me. Create .claude/settings.json in this project — or merge into it if it already exists — so it contains:
+
 {
   "extraKnownMarketplaces": {
     "vestmap-app": {
@@ -55,53 +58,9 @@ with exactly this:
     "vestmap@vestmap-app": true
   }
 }
+
+Then tell me to restart Claude Code (or start a new session) so the VestMap skills load.
 ```
-
-Then start a new session (or reopen the project). VestMap loads on its own, and
-`autoUpdate` keeps it current — see [Keeping it up to date](#keeping-it-up-to-date).
-
-**Easiest of all — let Claude do it.** You don't have to create that file by hand. Just
-ask Claude, right in the app:
-
-> Add the VestMap marketplace and enable the vestmap plugin in `.claude/settings.json`,
-> with autoUpdate turned on.
-
-Claude writes the file for you; start a new session and you're done.
-
-### Terminal
-
-Both options below work in any terminal (zsh, bash, fish, PowerShell) as long as Claude
-Code is installed.
-
-**a) One copy-paste (recommended).** Paste both lines and press Enter:
-
-```bash
-claude plugin marketplace add VestMap-App/marketplace
-claude plugin install vestmap@vestmap-app
-```
-
-This installs VestMap for **every** project on your computer (user scope). Open Claude
-Code and the skills are ready. To get future updates automatically, see
-[Keeping it up to date](#keeping-it-up-to-date).
-
-**b) Inside a running `claude` session.** These `/` commands work **only** in a terminal
-`claude` session — not the desktop or web chat box:
-
-```
-/plugin marketplace add VestMap-App/marketplace
-/plugin install vestmap@vestmap-app
-/reload-plugins
-```
-
-If you're asked where to install, choose **User**.
-
-### Check it worked
-
-- **Terminal:** run `claude plugin list` — you should see `vestmap@vestmap-app` with
-  status `enabled`. (Or, in a `claude` session, type `/` and look for
-  **`vestmap:vestmap`** and **`vestmap:vestmap-om-pages`**.)
-- **Desktop / web app:** ask Claude *"are the VestMap skills loaded?"*, or just try a
-  question like *"What's the median household income around 1600 Pennsylvania Ave NW?"*
 
 ## Using the skills
 
