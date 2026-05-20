@@ -17,7 +17,6 @@ parse). Numbers may include `$`/`,` (e.g. `"$1,234"`). Missing/blank → treated
   "financing":  { ... },
   "assumptions":{ ... },
   "t12":        { ... },        // optional: renders the T12 tab
-  "notes":      { ... },        // optional: inline note per expense key
   "data_completeness": { ... }  // optional: tier + missing list
 }
 ```
@@ -115,10 +114,6 @@ Defaults shown; override only when the user gives different numbers.
             { "label": "Management Fees", "annual": 26710.35 } ] }
 ```
 `total: true` bolds the row. Include it so the workbook shows the trailing-12 evidence base.
-
-## `notes` (optional)
-`{ "management": "actuals; 8% of gross", "general_admin": "incl. dues offset by parking" }` — keys
-match expense bucket names; the note prints in the Proforma's notes column.
 
 ## `data_completeness` (optional)
 `{ "tier": 1, "missing": [], "flags": [] }` — set `tier` 2/3 and list `missing` items when inputs are

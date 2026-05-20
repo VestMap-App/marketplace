@@ -21,7 +21,9 @@ import datetime as _dt
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 
 
 # --------------------------------------------------------------------------
@@ -247,12 +249,80 @@ USD = '$#,##0'
 USD2 = '$#,##0.00'
 PCT = '0.0%'
 NUM = '#,##0'
+PIE_COLORS = ["#1F4E46", "#3E7D6A", "#6FA292", "#A7C7BC", "#C9803A", "#D9A566",
+              "#8A8D91", "#B9BCC0", "#5B6E8C", "#9FB0C9", "#7A5C7B", "#B49AB5"]
+
+
+def _save_chart_pngs(M, outdir):
+    """Render the 4 dashboard charts as PNGs for embedding. Returns {key: path} or None
+    if matplotlib is unavailable (the workbook then ships without chart images)."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as mticker
+    except Exception:
+        return None
+
+    green, green2, orange = "#1F4E46", "#3E7D6A", "#C9803A"
+
+    def finish(fig, name):
+        path = os.path.join(outdir, name)
+        fig.savefig(path, dpi=150, facecolor="white")
+        plt.close(fig)
+        return path
+
+    out = {}
+
+    def pie(slices, title, name):
+        slices = [(lab, v) for lab, v in slices if v and v > 0]
+        fig, ax = plt.subplots(figsize=(4.4, 3.0))
+        if slices:
+            ax.pie([v for _, v in slices], labels=[lab for lab, _ in slices],
+                   autopct="%1.0f%%", colors=PIE_COLORS[:len(slices)],
+                   textprops={"fontsize": 6.5}, pctdistance=0.78, labeldistance=1.08,
+                   wedgeprops={"linewidth": 0.5, "edgecolor": "white"})
+        ax.set_title(title, fontsize=10.5, color=green, fontweight="bold")
+        fig.tight_layout()
+        return finish(fig, name)
+
+    exp = [(e["label"], e["proforma"]) for e in M["expense_lines"]]
+    out["exp"] = pie(exp, "Operating Expenses (Proforma)", "chart_exp.png")
+
+    inc = M["income"]
+    islices = [("Net Rental", inc["rent_proforma"] + inc["vac_proforma"])] + \
+              [(o["label"], o["proforma"]) for o in inc["other"]]
+    out["income"] = pie(islices, "Income (Proforma)", "chart_income.png")
+
+    proj = M["projection"]
+    yrs = [pr["year"] for pr in proj]
+
+    def line(series, title, name, dollar_axis=True):
+        fig, ax = plt.subplots(figsize=(4.4, 3.0))
+        for label, key, color in series:
+            ax.plot(yrs, [pr[key] for pr in proj], marker="o", ms=3, color=color, label=label)
+        ax.legend(fontsize=7, loc="upper left")
+        ax.set_title(title, fontsize=10.5, color=green, fontweight="bold")
+        ax.tick_params(labelsize=7)
+        pre = "$" if dollar_axis else ""
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{pre}{v/1000:.0f}k"))
+        ax.set_xlabel("Year", fontsize=7)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        fig.tight_layout()
+        return finish(fig, name)
+
+    out["cashflow"] = line([("Income", "income", green), ("Expenses", "expenses", orange),
+                            ("Cash Flow", "cash_flow", green2)],
+                           "Income · Expenses · Cash Flow ($/yr)", "chart_cashflow.png", dollar_axis=False)
+    out["equity"] = line([("Property Value", "value", green), ("Equity", "equity", green2),
+                          ("Loan Balance", "loan_balance", orange)],
+                         "Equity · Loan Balance · Value", "chart_equity.png")
+    return out
 
 
 def build_workbook(M, path):
     import openpyxl
-    from openpyxl.chart import PieChart, LineChart, Reference
-    from openpyxl.chart.label import DataLabelList
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
@@ -278,19 +348,17 @@ def build_workbook(M, path):
     pf.title = "Proforma"
     pf.sheet_view.showGridLines = False
     pf.column_dimensions["A"].width = 2
-    pf.column_dimensions["B"].width = 30
-    pf.column_dimensions["C"].width = 15
-    pf.column_dimensions["D"].width = 15
-    pf.column_dimensions["E"].width = 2
-    pf.column_dimensions["F"].width = 42
+    pf.column_dimensions["B"].width = 34
+    pf.column_dimensions["C"].width = 17
+    pf.column_dimensions["D"].width = 17
 
     R = {}
     p = M["property"]
     style(pf["B1"], bold=True, size=16, color=WHITE, fill=ACCENT)
     pf["B1"] = p["address"]
-    for c in ("C1", "D1", "E1", "F1"):
+    for c in ("C1", "D1"):
         pf[c].fill = PatternFill("solid", fgColor=ACCENT)
-    pf.merge_cells("B1:F1")
+    pf.merge_cells("B1:D1")
     sub = f'{p["type"]} · {p["units"]} unit(s) · Analysis {p["date"]}'.strip(" ·")
     style(pf["B2"], size=9, color=GREY)
     pf["B2"] = sub
@@ -305,30 +373,25 @@ def build_workbook(M, path):
     def section(title):
         nonlocal row
         style(pf.cell(row=row, column=2, value=title), bold=True, size=11, color=WHITE, fill=ACCENT2)
-        for col in (3, 4, 6):
+        for col in (3, 4):
             pf.cell(row=row, column=col).fill = PatternFill("solid", fgColor=ACCENT2)
         row += 1
 
-    def line(label, cur=None, pro=None, note=None, *, bold=False, fmt=USD, fill=None):
+    def line(label, cur=None, pro=None, *, bold=False, fmt=USD, fill=None):
         nonlocal row
         style(pf.cell(row=row, column=2, value=label), bold=bold, fill=fill)
         if cur is not None:
             style(pf.cell(row=row, column=3, value=cur), bold=bold, fmt=fmt, align="right", fill=fill)
         if pro is not None:
             style(pf.cell(row=row, column=4, value=pro), bold=bold, fmt=fmt, align="right", fill=fill)
-        if note:
-            style(pf.cell(row=row, column=6, value=note), size=9, color=GREY, italic=True)
         r = row
         row += 1
         return r
 
     inc = M["income"]
-    notes = M["notes"]
     section("INCOME")
-    R["rent"] = line("Rental Income", inc["rent_current"], inc["rent_proforma"],
-                     notes.get("rental_income", "Current = in-place / T12 actual; Proforma = market rent × 12"))
-    vac_note = f'Proforma vacancy @ {M["assumptions"]["vacancy"]*100:.0f}%; current reflected in actuals'
-    R["vac"] = line("Vacancy & Credit Loss", inc["vac_current"], inc["vac_proforma"], vac_note)
+    R["rent"] = line("Rental Income", inc["rent_current"], inc["rent_proforma"])
+    R["vac"] = line("Vacancy & Credit Loss", inc["vac_current"], inc["vac_proforma"])
     R["other_first"] = row
     for o in inc["other"]:
         line(o["label"], o["current"], o["proforma"])
@@ -345,16 +408,13 @@ def build_workbook(M, path):
     section("OPERATING EXPENSES")
     R["exp_first"] = row
     for e in M["expense_lines"]:
-        note = notes.get(e["key"]) if e["key"] else None
         if e["key"] == "management":
             pro = f'=D{R["egi"]}*{M["assumptions"]["mgmt_pct"]}'
-            note = note or f'{M["assumptions"]["mgmt_pct"]*100:.0f}% of EGI (proforma); actual (current)'
         elif e["key"] == "repairs_maintenance":
             pro = f'=D{R["egi"]}*{M["assumptions"]["rm_pct"]}'
-            note = note or f'{M["assumptions"]["rm_pct"]*100:.0f}% of EGI (proforma); actual (current)'
         else:
             pro = e["proforma"]
-        line(e["label"], e["current"], pro, note)
+        line(e["label"], e["current"], pro)
     R["exp_last"] = row - 1
     R["opex"] = line("Total Operating Expenses",
                      f'=SUM(C{R["exp_first"]}:C{R["exp_last"]})',
@@ -371,13 +431,10 @@ def build_workbook(M, path):
     R["price"] = line("Purchase Price", fin["price"], f'=C{row}')  # D mirrors C
     R["ppd"] = line("Price per Door", f'=C{R["price"]}/{p["units"]}', f'=D{R["price"]}/{p["units"]}')
     R["ltv"] = line("LTV", fin["ltv"], f'=C{row}', fmt=PCT)
-    R["loan"] = line("Loan Amount", f'=C{R["price"]}*C{R["ltv"]}', f'=D{R["price"]}*D{R["ltv"]}',
-                     "Or override on the Loan sheet")
+    R["loan"] = line("Loan Amount", f'=C{R["price"]}*C{R["ltv"]}', f'=D{R["price"]}*D{R["ltv"]}')
     R["down"] = line("Down Payment", f'=C{R["price"]}-C{R["loan"]}', f'=D{R["price"]}-D{R["loan"]}')
-    R["cash"] = line("Total Cash Needed", fin["cash_needed"], f'=C{row}',
-                     "Down payment + closing + rehab + loan fees")
-    R["ds"] = line("Annual Debt Service", "=Loan!B10", "=Loan!B10",
-                   f'{fin["rate"]*100:.3f}% · {int(fin["years"])}-yr amortization (Loan sheet)')
+    R["cash"] = line("Total Cash Needed", fin["cash_needed"], f'=C{row}')
+    R["ds"] = line("Annual Debt Service", "=Loan!B10", "=Loan!B10")
 
     row += 1
     section("RETURNS")
@@ -393,7 +450,7 @@ def build_workbook(M, path):
     R["grm"] = line("Gross Rent Multiplier", f'=C{R["price"]}/C{R["rent"]}',
                     f'=D{R["price"]}/D{R["rent"]}', fmt='0.0')
 
-    pf.print_area = f"A1:F{row}"
+    pf.print_area = f"A1:D{row}"
     pf.page_setup.orientation = "portrait"
     pf.page_setup.fitToWidth = 1
     pf.page_setup.fitToHeight = 1
@@ -511,7 +568,7 @@ def build_workbook(M, path):
     sm = wb.create_sheet("Summary")
     wb.move_sheet("Summary", -(len(wb.sheetnames) - 1))  # make it first
     sm.sheet_view.showGridLines = False
-    for col, w in zip("ABCDEFGHIJKLM", [2, 18, 13, 13, 4, 18, 13, 13, 4, 13, 13, 13, 13]):
+    for col, w in zip("ABCDEFGHIJKLM", [2] + [12] * 12):
         sm.column_dimensions[col].width = w
 
     style(sm["B2"], bold=True, size=18, color=WHITE, fill=ACCENT)
@@ -522,130 +579,67 @@ def build_workbook(M, path):
     style(sm["B3"], size=10, color=GREY)
     sm["B3"] = sub
     sm.merge_cells("B3:M3")
+    style(sm["B4"], size=8, italic=True, color=GREY)
+    sm["B4"] = "Each card: large figure = Proforma · small figure = Current (T12 actual)"
+    sm.merge_cells("B4:M4")
 
-    # KPI band: label row 5, Current row 6, Proforma row 7
+    # KPI band — six cards, each two columns wide: label (r6), Proforma value (r7), Current value (r8)
     kpis = [
-        ("NOI", f'Proforma!C{R["noi"]}', f'Proforma!D{R["noi"]}', USD),
-        ("Cap Rate", f'Proforma!C{R["cap"]}', f'Proforma!D{R["cap"]}', PCT),
-        ("DSCR", f'Proforma!C{R["dscr"]}', f'Proforma!D{R["dscr"]}', '0.00'),
-        ("Cash-on-Cash", f'Proforma!C{R["coc"]}', f'Proforma!D{R["coc"]}', PCT),
-        ("Cash Flow / Yr", f'Proforma!C{R["fcf_y"]}', f'Proforma!D{R["fcf_y"]}', USD),
-        ("Price / Door", f'Proforma!C{R["ppd"]}', f'Proforma!D{R["ppd"]}', USD),
+        ("NOI", f'Proforma!D{R["noi"]}', f'Proforma!C{R["noi"]}', USD),
+        ("Cap Rate", f'Proforma!D{R["cap"]}', f'Proforma!C{R["cap"]}', PCT),
+        ("DSCR", f'Proforma!D{R["dscr"]}', f'Proforma!C{R["dscr"]}', '0.00'),
+        ("Cash-on-Cash", f'Proforma!D{R["coc"]}', f'Proforma!C{R["coc"]}', PCT),
+        ("Cash Flow / Yr", f'Proforma!D{R["fcf_y"]}', f'Proforma!C{R["fcf_y"]}', USD),
+        ("Price / Door", f'Proforma!D{R["ppd"]}', f'Proforma!C{R["ppd"]}', USD),
     ]
-    col = 2
-    style(sm.cell(row=5, column=1, value=""), size=9)
-    style(sm.cell(row=6, column=1, value="Current"), size=9, bold=True, color=GREY, align="right")
-    style(sm.cell(row=7, column=1, value="Proforma"), size=9, bold=True, color=ACCENT, align="right")
-    for label, cur_ref, pro_ref, fmt in kpis:
-        style(sm.cell(row=5, column=col, value=label), size=9, bold=True, color=GREY, fill=LIGHT, align="center")
-        style(sm.cell(row=6, column=col, value=f'={cur_ref}'), size=11, color=GREY, fill=LIGHT, align="center", fmt=fmt)
-        style(sm.cell(row=7, column=col, value=f'={pro_ref}'), size=14, bold=True, color=ACCENT, fill=LIGHT, align="center", fmt=fmt)
-        col += 1
+    for i, (label, pro_ref, cur_ref, fmt) in enumerate(kpis):
+        c1 = 2 + 2 * i
+        c2 = c1 + 1
+        L, Rr = get_column_letter(c1), get_column_letter(c2)
+        for rr_, val, kw in (
+            (6, label, dict(size=9, bold=True, color=GREY, align="center", fill=LIGHT)),
+            (7, f'={pro_ref}', dict(size=15, bold=True, color=ACCENT, align="center", fill=LIGHT, fmt=fmt)),
+            (8, f'={cur_ref}', dict(size=9, color=GREY, align="center", fill=LIGHT, fmt=fmt + '" cur"')),
+        ):
+            sm.merge_cells(f"{L}{rr_}:{Rr}{rr_}")
+            style(sm.cell(row=rr_, column=c1, value=val), **kw)
+            sm.cell(row=rr_, column=c2).fill = PatternFill("solid", fgColor=LIGHT)
 
-    # --- chart-source data (formula-linked to Proforma so charts stay live) ---
-    # Expense composition (proforma column)
-    sm["B40"] = "Expense"
-    sm["C40"] = "Amount"
-    er = 41
-    for e in M["expense_lines"]:
-        # find this expense's proforma cell on Proforma sheet
-        sm.cell(row=er, column=2, value=e["label"])
-        # reference proforma value by recomputing position: expenses occupy exp_first..exp_last in order
-        idx = M["expense_lines"].index(e)
-        pf_row = R["exp_first"] + idx
-        sm.cell(row=er, column=3, value=f"=Proforma!D{pf_row}")
-        er += 1
-    exp_data_last = er - 1
+    # --- dashboard charts (rendered as images → exact layout, no overlap) ---
+    tmpdir = tempfile.mkdtemp(prefix="rpa_charts_")
+    try:
+        pngs = _save_chart_pngs(M, tmpdir)
+        if pngs:
+            try:
+                from openpyxl.drawing.image import Image as XLImage
+                grid = [("exp", "B10"), ("income", "H10"), ("cashflow", "B27"), ("equity", "H27")]
+                for key, cell in grid:
+                    if key in pngs:
+                        img = XLImage(pngs[key])
+                        img.width, img.height = 440, 300
+                        img.anchor = cell
+                        sm.add_image(img)
+            except Exception:
+                pass  # image support unavailable — ship the workbook without chart images
 
-    # Income composition (proforma): net rental + each other income
-    sm["E40"] = "Income"
-    sm["F40"] = "Amount"
-    ir = 41
-    sm.cell(row=ir, column=5, value="Net Rental")
-    sm.cell(row=ir, column=6, value=f'=Proforma!D{R["rent"]}+Proforma!D{R["vac"]}')
-    ir += 1
-    for j, o in enumerate(M["income"]["other"]):
-        sm.cell(row=ir, column=5, value=o["label"])
-        sm.cell(row=ir, column=6, value=f'=Proforma!D{R["other_first"] + j}')
-        ir += 1
-    inc_data_last = ir - 1
+        # data-completeness banner (Tier 2/3)
+        comp = M["completeness"]
+        if comp.get("tier", 1) != 1 or comp.get("missing"):
+            msg = "DATA COMPLETENESS · Tier {} — still needed: {}".format(
+                comp.get("tier", "?"), ", ".join(comp.get("missing", [])) or "see notes")
+            style(sm["B44"], bold=True, color="9A3B2E")
+            sm["B44"] = msg
+            sm.merge_cells("B44:M44")
 
-    # Projection table (values; drives line charts)
-    proj = M["projection"]
-    headers = ["Year", "Income", "Expenses", "Cash Flow", "Property Value", "Loan Balance", "Equity"]
-    for i, h in enumerate(headers):
-        sm.cell(row=60, column=2 + i, value=h)
-    for k, pr in enumerate(proj):
-        rr5 = 61 + k
-        sm.cell(row=rr5, column=2, value=pr["year"])
-        sm.cell(row=rr5, column=3, value=round(pr["income"], 2))
-        sm.cell(row=rr5, column=4, value=round(pr["expenses"], 2))
-        sm.cell(row=rr5, column=5, value=round(pr["cash_flow"], 2))
-        sm.cell(row=rr5, column=6, value=round(pr["value"], 2))
-        sm.cell(row=rr5, column=7, value=round(pr["loan_balance"], 2))
-        sm.cell(row=rr5, column=8, value=round(pr["equity"], 2))
-    proj_last = 60 + len(proj)
+        sm.print_area = "B2:M45"
+        sm.page_setup.orientation = "landscape"
+        sm.page_setup.fitToWidth = 1
+        sm.page_setup.fitToHeight = 1
+        sm.sheet_properties.pageSetUpPr = openpyxl.worksheet.properties.PageSetupProperties(fitToPage=True)
 
-    # --- charts ---
-    pie_e = PieChart()
-    pie_e.title = "Operating Expenses (Proforma)"
-    pie_e.height = 7
-    pie_e.width = 11
-    data = Reference(sm, min_col=3, min_row=40, max_row=exp_data_last)
-    cats = Reference(sm, min_col=2, min_row=41, max_row=exp_data_last)
-    pie_e.add_data(data, titles_from_data=True)
-    pie_e.set_categories(cats)
-    pie_e.dataLabels = DataLabelList()
-    pie_e.dataLabels.showPercent = True
-    sm.add_chart(pie_e, "B9")
-
-    pie_i = PieChart()
-    pie_i.title = "Income (Proforma)"
-    pie_i.height = 7
-    pie_i.width = 11
-    data = Reference(sm, min_col=6, min_row=40, max_row=inc_data_last)
-    cats = Reference(sm, min_col=5, min_row=41, max_row=inc_data_last)
-    pie_i.add_data(data, titles_from_data=True)
-    pie_i.set_categories(cats)
-    pie_i.dataLabels = DataLabelList()
-    pie_i.dataLabels.showPercent = True
-    sm.add_chart(pie_i, "F9")
-
-    line1 = LineChart()
-    line1.title = "Income · Expenses · Cash Flow"
-    line1.height = 7
-    line1.width = 11
-    d = Reference(sm, min_col=3, max_col=5, min_row=60, max_row=proj_last)
-    c = Reference(sm, min_col=2, min_row=61, max_row=proj_last)
-    line1.add_data(d, titles_from_data=True)
-    line1.set_categories(c)
-    sm.add_chart(line1, "B25")
-
-    line2 = LineChart()
-    line2.title = "Equity · Loan Balance · Value"
-    line2.height = 7
-    line2.width = 11
-    d = Reference(sm, min_col=6, max_col=8, min_row=60, max_row=proj_last)
-    c = Reference(sm, min_col=2, min_row=61, max_row=proj_last)
-    line2.add_data(d, titles_from_data=True)
-    line2.set_categories(c)
-    sm.add_chart(line2, "F25")
-
-    # data-completeness banner (Tier 2/3)
-    comp = M["completeness"]
-    if comp.get("tier", 1) != 1 or comp.get("missing"):
-        msg = "DATA COMPLETENESS: Tier {} — still needed: {}".format(
-            comp.get("tier", "?"), ", ".join(comp.get("missing", [])) or "see notes")
-        style(sm["B42"], bold=True, color="9A3B2E")
-        sm["B42"] = msg
-
-    sm.print_area = "B2:M38"
-    sm.page_setup.orientation = "landscape"
-    sm.page_setup.fitToWidth = 1
-    sm.page_setup.fitToHeight = 1
-    sm.sheet_properties.pageSetUpPr = openpyxl.worksheet.properties.PageSetupProperties(fitToPage=True)
-
-    wb.save(path)
+        wb.save(path)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
     return path
 
 

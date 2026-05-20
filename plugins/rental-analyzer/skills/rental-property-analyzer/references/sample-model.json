@@ -51,10 +51,5 @@
     "appreciation": 0.03,
     "projection_years": [1, 2, 5, 10, 15, 20, 30]
   },
-  "notes": {
-    "management": "actuals; proforma 8% of EGI",
-    "water_sewer": "submetered, tenants pay",
-    "repairs_maintenance": "assumed 5% of EGI"
-  },
   "data_completeness": { "tier": 1, "missing": [], "flags": [] }
 }

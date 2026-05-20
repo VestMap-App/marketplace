@@ -116,7 +116,7 @@ These come from standard underwriting and match the source pro formas. To change
 This skill is fully standalone. **But** if VestMap MCP tools (`mcp__*vestmap*` / the `vestmap` skill)
 are available and the rent roll is missing market rents — or the user wants a market sanity-check —
 you may pull median rent, property-tax, and market context for the address and use them to fill the
-`market_rent` column or annotate assumptions. Always label these as estimates in the notes, and
+`market_rent` column or sanity-check assumptions. Always flag these as estimates to the user, and
 never block the build waiting on VestMap. If it's not connected, ignore this entirely.
 
 ## Output files
