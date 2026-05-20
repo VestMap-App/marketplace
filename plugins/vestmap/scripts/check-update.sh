@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VestMap plugin — SessionStart update check.
-# Prints a one-line notice when a newer marketplace release is available.
+# Prints a one-line notice when a newer version has been published.
 # Invariant: always exit 0 and fail silently — this must never block or delay
 # session start, even with no network.
 
@@ -20,18 +20,18 @@ extract_quoted() {
 installed="$(extract_quoted version < "$MANIFEST")"
 [ -z "$installed" ] && exit 0
 
+# The published version is whatever plugin.json declares on the default branch — the
+# same source of truth that drives `claude plugin update`.
 latest="$(curl -fsS --max-time 3 \
-  https://api.github.com/repos/VestMap-App/marketplace/releases/latest 2>/dev/null \
-  | extract_quoted tag_name)"
+  https://raw.githubusercontent.com/VestMap-App/marketplace/main/plugins/vestmap/.claude-plugin/plugin.json 2>/dev/null \
+  | extract_quoted version)"
 [ -z "$latest" ] && exit 0
 
-latest="${latest#v}"
-
-# Nudge only when the latest release sorts strictly above the installed version.
+# Nudge only when the latest version sorts strictly above the installed version.
 if [ "$installed" != "$latest" ]; then
   newer="$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -1)"
   if [ "$newer" = "$latest" ]; then
-    echo "VestMap: update available ($installed -> $latest). Run: /plugin marketplace update vestmap-app  then  /reload-plugins"
+    echo "VestMap: update available ($installed -> $latest). Desktop/web app: start a new session. Terminal: run 'claude plugin marketplace update vestmap-app && claude plugin update vestmap@vestmap-app' then restart. (See the README, \"Keeping it up to date\".)"
   fi
 fi
 
