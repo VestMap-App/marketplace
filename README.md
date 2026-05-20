@@ -21,48 +21,69 @@ base skill — installing the plugin always gets you both, correctly paired.
 
 You'll need three things:
 
-1. **Claude Code** — installed and open. If you don't have it yet, get it at
+1. **Claude Code** — installed. If you don't have it yet, get it at
    https://claude.ai/claude-code.
 2. **A VestMap account** — free to create at https://app.vestmap.com/mcp.
 3. **The VestMap MCP server connected** in Claude Code. This is what lets Claude pull
    live VestMap data. Follow the setup steps at https://app.vestmap.com/mcp.
 
-## Install it — step by step
+## Install it
 
-This takes about a minute. You don't need a terminal or any coding knowledge —
-everything happens inside Claude Code.
+This takes about a minute. There are two ways to do it — both end up in exactly the
+same place, so use whichever you prefer. **Option A** is a single copy-paste into a
+terminal. **Option B** stays inside Claude Code and needs no terminal. Every command
+below is labeled with *where* to run it, so it lands in the right place.
 
-1. **Open Claude Code.**
+### Option A — paste into a terminal
 
-2. **Add the VestMap marketplace.** Type this and press Enter:
+Open your terminal app — on a Mac that's **Terminal** or **iTerm**; on Windows,
+**PowerShell** or **Windows Terminal** — then paste both lines and press Enter:
+
+```bash
+# Run these in your terminal (not inside Claude Code):
+claude plugin marketplace add VestMap-App/marketplace
+claude plugin install vestmap@vestmap-app
+```
+
+That's the whole install. It works in any terminal (zsh, bash, fish, PowerShell) as
+long as Claude Code is installed, and it makes VestMap available in **every** project
+on your computer. The next time you open Claude Code, the skills are ready. (If Claude
+Code is already running, type `/reload-plugins` inside it, or just restart it.)
+
+### Option B — inside Claude Code
+
+Type each of these **at the Claude Code prompt** — the box where you chat with Claude,
+*not* your terminal. They start with `/`, and you press Enter after each one.
+
+1. **Add the VestMap marketplace** — *type inside Claude Code:*
 
    ```
    /plugin marketplace add VestMap-App/marketplace
    ```
 
-   This tells Claude Code where to find the VestMap plugin. Nothing is installed yet —
-   you're just adding the "store." If Claude Code asks you to confirm, say yes.
+   This just points Claude Code at the plugin; nothing is installed yet. If Claude
+   Code asks you to confirm, say yes.
 
-3. **Install the plugin.** Type this and press Enter:
+2. **Install the plugin** — *type inside Claude Code:*
 
    ```
    /plugin install vestmap@vestmap-app
    ```
 
-   This installs the VestMap plugin, which includes both skills.
+   If Claude Code asks where to install, choose **User** — this makes VestMap
+   available in every project on your computer.
 
-4. **Choose where to install it.** If Claude Code asks, choose **User** — this makes
-   VestMap available in every project on your computer.
-
-5. **Turn it on.** Type this and press Enter (or simply restart Claude Code):
+3. **Turn it on** — *type inside Claude Code* (or simply restart Claude Code):
 
    ```
    /reload-plugins
    ```
 
-6. **You're done.** To check it worked, type `/` and look for **`vestmap:vestmap`** and
-   **`vestmap:vestmap-om-pages`** in the menu. If you don't see them, restart Claude
-   Code and look again.
+### Check it worked
+
+Inside Claude Code, type `/` and look for **`vestmap:vestmap`** and
+**`vestmap:vestmap-om-pages`** in the menu. If you don't see them, restart Claude Code
+and look again.
 
 ## Using the skills
 
@@ -85,10 +106,18 @@ The `vestmap:` prefix simply means the skill comes from the VestMap plugin.
 
 When VestMap publishes an update, here's how to get it:
 
-- **Manually:** type `/plugin marketplace update vestmap-app`, then `/reload-plugins`.
-- **Automatically:** open `/plugin`, go to the **Marketplaces** tab, select
-  **vestmap-app**, and turn on **auto-update**. Auto-update is off by default for
-  community marketplaces, so this is a one-time opt-in.
+- **From a terminal:** run these two lines, then restart Claude Code:
+
+  ```bash
+  # Run these in your terminal (not inside Claude Code):
+  claude plugin marketplace update vestmap-app
+  claude plugin update vestmap@vestmap-app
+  ```
+- **Inside Claude Code:** type `/plugin marketplace update vestmap-app`, then
+  `/reload-plugins`.
+- **Automatically:** open `/plugin` inside Claude Code, go to the **Marketplaces**
+  tab, select **vestmap-app**, and turn on **auto-update**. Auto-update is off by
+  default for community marketplaces, so this is a one-time opt-in.
 
 The plugin also checks for updates when a Claude Code session starts and shows a short
 notice if a newer version is available.
