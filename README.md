@@ -21,7 +21,8 @@ base skill — installing the plugin always gets you both, correctly paired.
 
 You'll need three things:
 
-1. **Claude Code** — installed. If you don't have it yet, get it at
+1. **Claude Code** — installed. This can be the **desktop app**, the **web app**
+   (claude.ai/code), or the **terminal** CLI. If you don't have it yet, get it at
    https://claude.ai/claude-code.
 2. **A VestMap account** — free to create at https://app.vestmap.com/mcp.
 3. **The VestMap MCP server connected** in Claude Code. This is what lets Claude pull
@@ -29,61 +30,78 @@ You'll need three things:
 
 ## Install it
 
-This takes about a minute. There are two ways to do it — both end up in exactly the
-same place, so use whichever you prefer. **Option A** is a single copy-paste into a
-terminal. **Option B** stays inside Claude Code and needs no terminal. Every command
-below is labeled with *where* to run it, so it lands in the right place.
+Use the section that matches **how you run Claude Code**. Quick key for the commands
+below: anything starting with `/` works **only inside a terminal `claude` session**;
+anything starting with `claude` runs in **any terminal**; the **desktop and web apps**
+use a small settings file.
 
-### Option A — paste into a terminal
+### Desktop app or web (claude.ai/code)
 
-Open your terminal app — on a Mac that's **Terminal** or **iTerm**; on Windows,
-**PowerShell** or **Windows Terminal** — then paste both lines and press Enter:
+The desktop and web apps **don't have the `/plugin` command** — typing it does nothing.
+Instead you point Claude Code at VestMap with a settings file, and it loads automatically.
+
+Create (or edit) **`.claude/settings.json`** in the project or folder you're working in,
+with exactly this:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "vestmap-app": {
+      "source": { "source": "github", "repo": "VestMap-App/marketplace" },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "vestmap@vestmap-app": true
+  }
+}
+```
+
+Then start a new session (or reopen the project). VestMap loads on its own, and
+`autoUpdate` keeps it current — see [Keeping it up to date](#keeping-it-up-to-date).
+
+**Easiest of all — let Claude do it.** You don't have to create that file by hand. Just
+ask Claude, right in the app:
+
+> Add the VestMap marketplace and enable the vestmap plugin in `.claude/settings.json`,
+> with autoUpdate turned on.
+
+Claude writes the file for you; start a new session and you're done.
+
+### Terminal
+
+Both options below work in any terminal (zsh, bash, fish, PowerShell) as long as Claude
+Code is installed.
+
+**a) One copy-paste (recommended).** Paste both lines and press Enter:
 
 ```bash
-# Run these in your terminal (not inside Claude Code):
 claude plugin marketplace add VestMap-App/marketplace
 claude plugin install vestmap@vestmap-app
 ```
 
-That's the whole install. It works in any terminal (zsh, bash, fish, PowerShell) as
-long as Claude Code is installed, and it makes VestMap available in **every** project
-on your computer. The next time you open Claude Code, the skills are ready. (If Claude
-Code is already running, type `/reload-plugins` inside it, or just restart it.)
+This installs VestMap for **every** project on your computer (user scope). Open Claude
+Code and the skills are ready. To get future updates automatically, see
+[Keeping it up to date](#keeping-it-up-to-date).
 
-### Option B — inside Claude Code
+**b) Inside a running `claude` session.** These `/` commands work **only** in a terminal
+`claude` session — not the desktop or web chat box:
 
-Type each of these **at the Claude Code prompt** — the box where you chat with Claude,
-*not* your terminal. They start with `/`, and you press Enter after each one.
+```
+/plugin marketplace add VestMap-App/marketplace
+/plugin install vestmap@vestmap-app
+/reload-plugins
+```
 
-1. **Add the VestMap marketplace** — *type inside Claude Code:*
-
-   ```
-   /plugin marketplace add VestMap-App/marketplace
-   ```
-
-   This just points Claude Code at the plugin; nothing is installed yet. If Claude
-   Code asks you to confirm, say yes.
-
-2. **Install the plugin** — *type inside Claude Code:*
-
-   ```
-   /plugin install vestmap@vestmap-app
-   ```
-
-   If Claude Code asks where to install, choose **User** — this makes VestMap
-   available in every project on your computer.
-
-3. **Turn it on** — *type inside Claude Code* (or simply restart Claude Code):
-
-   ```
-   /reload-plugins
-   ```
+If you're asked where to install, choose **User**.
 
 ### Check it worked
 
-Inside Claude Code, type `/` and look for **`vestmap:vestmap`** and
-**`vestmap:vestmap-om-pages`** in the menu. If you don't see them, restart Claude Code
-and look again.
+- **Terminal:** run `claude plugin list` — you should see `vestmap@vestmap-app` with
+  status `enabled`. (Or, in a `claude` session, type `/` and look for
+  **`vestmap:vestmap`** and **`vestmap:vestmap-om-pages`**.)
+- **Desktop / web app:** ask Claude *"are the VestMap skills loaded?"*, or just try a
+  question like *"What's the median household income around 1600 Pennsylvania Ave NW?"*
 
 ## Using the skills
 
@@ -104,34 +122,41 @@ The `vestmap:` prefix simply means the skill comes from the VestMap plugin.
 
 ## Keeping it up to date
 
-When VestMap publishes an update, here's how to get it:
+VestMap is set up to stay current on its own — in most cases you do nothing.
 
-- **From a terminal:** run these two lines, then restart Claude Code:
+- **Desktop app / web (claude.ai/code):** **automatic.** Each new session loads the
+  current published version. With `autoUpdate` in your `.claude/settings.json` (as shown
+  in [Install it](#install-it)), the marketplace also refreshes at startup. Nothing to do.
+- **Terminal:** turn auto-update on once, then forget it. Either keep `"autoUpdate": true`
+  on the `vestmap-app` entry in your `~/.claude/settings.json`, **or** run `/plugin` in a
+  `claude` session → **Marketplaces** tab → select **vestmap-app** → **Enable
+  auto-update**. (Third-party marketplaces start with auto-update off, so this is a
+  one-time opt-in.) After that, updates apply at the next startup and Claude Code prompts
+  you to run `/reload-plugins`.
+- **Update right now**, without waiting for startup — in a terminal:
 
   ```bash
-  # Run these in your terminal (not inside Claude Code):
   claude plugin marketplace update vestmap-app
   claude plugin update vestmap@vestmap-app
   ```
-- **Inside Claude Code:** type `/plugin marketplace update vestmap-app`, then
-  `/reload-plugins`.
-- **Automatically:** open `/plugin` inside Claude Code, go to the **Marketplaces**
-  tab, select **vestmap-app**, and turn on **auto-update**. Auto-update is off by
-  default for community marketplaces, so this is a one-time opt-in.
 
-The plugin also checks for updates when a Claude Code session starts and shows a short
-notice if a newer version is available.
+  then restart Claude Code. (Inside a `claude` session you can instead run
+  `/plugin marketplace update vestmap-app` then `/reload-plugins`.)
 
-## For teams (advanced)
+When a newer version is published, Claude Code also shows a short "update available"
+notice at the start of a session.
 
-If you want everyone working in a shared repository to get the VestMap skills
-automatically, add this to that repository's `.claude/settings.json`:
+## For teams (shared repo)
+
+To give everyone in a shared repository the VestMap skills automatically, commit the
+**same** `.claude/settings.json` from [Install it](#install-it) to that repository:
 
 ```json
 {
   "extraKnownMarketplaces": {
     "vestmap-app": {
-      "source": { "source": "github", "repo": "VestMap-App/marketplace" }
+      "source": { "source": "github", "repo": "VestMap-App/marketplace" },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {
@@ -140,9 +165,24 @@ automatically, add this to that repository's `.claude/settings.json`:
 }
 ```
 
-Commit that file, and teammates will be prompted to install VestMap when they open the
-project. To have their copy stay current automatically, add `"autoUpdate": true` next
-to `"source"`.
+When teammates trust the project folder, Claude Code installs and enables VestMap for
+them, and `autoUpdate` keeps it current. Organizations can also enforce this fleet-wide
+through [managed settings](https://code.claude.com/docs/en/settings).
+
+## Publishing an update (for VestMap maintainers)
+
+VestMap pins an explicit version, so users only receive changes when you **bump that
+version** — pushing commits alone does nothing for already-installed copies.
+
+1. Make your changes under `plugins/vestmap/`.
+2. Bump `"version"` in `plugins/vestmap/.claude-plugin/plugin.json` using semver
+   (`MAJOR.MINOR.PATCH`). This one field is what triggers the update everywhere.
+3. Commit and push to the default branch.
+
+That's the whole release. Users with auto-update on (the default in the instructions
+above) pick it up at their next session; web/cloud sessions get it immediately; anyone
+else sees the "update available" notice. Optionally run `claude plugin tag` from the
+plugin folder to create a `vestmap--v<version>` git tag for the release.
 
 ## About VestMap
 
