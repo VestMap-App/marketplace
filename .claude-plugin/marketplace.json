@@ -9,6 +9,11 @@
       "name": "vestmap",
       "source": "./plugins/vestmap",
       "description": "VestMap property data and Offering Memorandum page generation. Bundles two skills: the base vestmap data skill and the vestmap-om-pages renderer."
+    },
+    {
+      "name": "rental-analyzer",
+      "source": "./plugins/rental-analyzer",
+      "description": "Rental Property Analyzer — turn a rent roll + T12 + loan terms into an investor-grade pro forma: an editable Excel model (Current vs. Proforma, NOI, cap rate, DSCR, cash-on-cash, loan amortization, multi-year projection) plus a polished PDF report with KPI dashboard and charts. Standalone — no API or MCP required."
     }
   ]
 }
