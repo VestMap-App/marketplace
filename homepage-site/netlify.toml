@@ -1,0 +1,16 @@
+# Static site — no build step. Netlify serves the repo root as-is.
+[build]
+  publish = "."
+
+# Temporary: send the site root to the For Brokers page until the
+# homepage (index.html) is implemented. Remove both rules once
+# index.html lands.
+[[redirects]]
+  from = "/"
+  to = "/for-brokers.html"
+  status = 302
+
+[[redirects]]
+  from = "/index.html"
+  to = "/for-brokers.html"
+  status = 302
