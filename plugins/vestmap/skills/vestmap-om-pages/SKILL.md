@@ -1,6 +1,6 @@
 ---
 name: vestmap-om-pages
-description: Render a property Offering Memorandum (OM) page for any US address — a visual, page-oriented PDF (default output) showing demographics, income, housing, workforce, and safety at Block / ZIP / City / County scales with explicit cross-scale comparisons. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a property. The page is market-agnostic — no city-specific wording, no carve-outs. Block-level data is added by default. Optional modules (Risk, Schools, Education detail, HPI, full income distribution, all 13 occupations, Business/MSA) are NOT rendered by default; they appear only on explicit request. Delegates all Block / Tract / ZIP / County data acquisition to the `vestmap` skill and inherits its R7 / R9 / R10 / R11 / R13 rules.
+description: Render a property Offering Memorandum (OM) page for any US address — a visual, page-oriented PDF (default output) showing demographics, income, housing, workforce, and safety at Block / ZIP / City / County scales with explicit cross-scale comparisons. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a property. The page is market-agnostic — no city-specific wording, no carve-outs. Block-level data is added by default. Optional modules (Risk, Schools, Education detail, HPI, full income distribution, all 13 occupations, Business/MSA) are NOT rendered by default; they appear only on explicit request. Delegates all Block / Tract / ZIP / County data acquisition to the `vestmap` skill and follows its hard rules.
 user-invocable: true
 ---
 
@@ -22,14 +22,14 @@ Do NOT trigger for: plain ranking tables, data dumps, one-liners, "what's the me
 
 ## Inheritance from `vestmap`
 
-Everything the parent skill enforces still applies. In particular:
+Everything the parent skill's hard rules enforce still applies. In particular:
 
-- **R5 (never use Tapestry for hard metrics)** — OM numbers come from `get_section_data("income"|"expansion"|"crime"|"schools")` and `query_gis_field` Tier 1 fields. NEVER from `get_section_data("demographics")`. NO Tapestry segment names on the page (no "Tapestry Grade", no lifestyle pill).
-- **R7 (explicit quantitative cross-scale comparisons)** — every multi-scale metric must show deltas/ratios, not just values. The 4-column + chip layout enforces this.
-- **R9 (blank fields are omitted, never filled)** — if a VestMap call returned null, the cell disappears. Never print "N/A", "—", "data unavailable", etc.
-- **R10 (no qualitative analysis beyond the numbers)** — no "desirable", "up-and-coming", "affluent". Numbers only.
-- **R11 (computed metrics are precondition-gated)** — no delta shown when a component is null.
-- **R13 (verify discovery-vs-field for decision-grade metrics)** — forecasted growth rates cross-check the canonical `_CY` / `_FY` field before rendering.
+- **No Tapestry for hard metrics** — OM numbers come from `get_section_data("income"|"expansion"|"crime"|"schools")` and `query_gis_field` Tier 1 fields. NEVER from `get_section_data("demographics")`. NO Tapestry segment names on the page (no "Tapestry Grade", no lifestyle pill).
+- **Explicit cross-scale comparisons** — every multi-scale metric shows deltas/ratios, not just values. The 4-column + chip layout enforces this.
+- **Blank fields are omitted, never filled** — if a VestMap call returned null, the cell disappears. Never print "N/A", "—", "data unavailable", etc.
+- **No qualitative analysis beyond the numbers** — no "desirable", "up-and-coming", "affluent". Numbers only.
+- **Computed metrics are precondition-gated** — no delta shown when a component is null.
+- **Different scales differ; never flag it.** Block / Tract / ZIP / County values for the same metric differ because they cover different areas. Report them as-is. Never verify, cross-check, reconcile, or describe a cross-scale difference as a divergence or anomaly. For a forecasted growth rate, query the one field (`MHIGRWCYFY`) directly at each scale and render the values — there is nothing to cross-check.
 
 Always read `../vestmap/SKILL.md` before acquiring data. Do not duplicate those rules here — follow them.
 
@@ -57,7 +57,6 @@ See `layout.md §9 PDF export` for the exact headless-Chrome command.
 **O2. The rendered page NEVER mentions missing data, failed calls, or dropped modules.** This is the strictest output rule in the skill. The page does not contain:
 - "N/A", "—", "No data", "data unavailable", "not available", "unknown"
 - "row dropped", "omitted", "skipped", "conserve layer calls"
-- R13 divergence explanations
 - Lists of which optional modules were added / excluded
 - Tool-call names, layer IDs, field names
 
@@ -193,7 +192,7 @@ signals intent.
   "Scale translation" below and O8.
 - `references/fields-manifest.md` does **not** constrain content. Any
   user-named field still routes through `search_real_estate_data`
-  discovery before `query_gis_field` (R13).
+  discovery before `query_gis_field`.
 - The poison-pill fallback in `data-spec.md §Block Acquisition Step 2`
   **still applies** whenever `query_gis_field` is used. Custom mode
   benefits from it for free.
@@ -248,7 +247,7 @@ mile-radius column — route every column through `query_gis_field` at
 
 - Does not define new data rules.
 - Does not publish ranking tables, briefs, or maps-only views.
-- Does not ask for confirmation before running (F6).
+- Does not ask for confirmation before running — VestMap is free and unlimited.
 - Does not render Tapestry-derived values anywhere on the page.
-- Does not mention missing data, failed calls, R13 divergences, or dropped sections in the rendered output OR the chat response.
+- Does not mention missing data, failed calls, cross-scale differences, or dropped sections in the rendered output OR the chat response.
 - Does not use market-specific wording. The rendered page is layout-identical across every US market.
