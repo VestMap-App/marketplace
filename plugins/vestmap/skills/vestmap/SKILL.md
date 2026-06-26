@@ -6,7 +6,7 @@ user-invocable: true
 
 # VestMap Skill
 
-Block Group / Tract / ZIP comparisons for any US address, queried directly from the canonical GIS layers. No section-first ceremony, no fixed template, no quota gates.
+Block Group / Tract / ZIP comparisons for any US address, queried directly from the GIS layers. No section-first ceremony, no fixed template, no quota gates.
 
 ## Scope gate
 
@@ -20,11 +20,11 @@ Don't guess a default location.
 
 For a single-address question:
 
-1. **`search_real_estate_data(<metric keywords>)`** — find the canonical field. From the result set, pick the **newest-vintage service URL** (e.g., `*_2024_*` over `*_2021_*`) and prefer Esri `_CY` / `_FY` over the ACS equivalent for the same concept.
+1. **`search_real_estate_data(<metric keywords>)`** — find the field. From the result set, pick the **newest-vintage service URL** (e.g., `*_2024_*` over `*_2021_*`) and prefer Esri `_CY` / `_FY` over the ACS equivalent for the same concept. Pick one field and use it at every scale.
 2. **`query_gis_field` in parallel at the Block Group + Tract + ZIP layer URLs** returned by that search. Cap each call at 3 fields.
 3. **Render a Block Group / Tract / ZIP comparison table with deltas** (see Presentation).
 
-**Do not lead with `get_section_data`.** Section payloads return reliably but are wired to specific (sometimes older) services and silently drift from the canonical layer. For any quantitative comparison, go straight to search → query. `get_section_data` is fine as a fallback when search returns nothing useful, or for the single-scale-only sections below.
+**Do not lead with `get_section_data`.** Section payloads return reliably but are wired to specific (sometimes older) services, so for any quantitative comparison go straight to search → query so every scale comes from the same field on the same service. `get_section_data` is fine as a fallback when search returns nothing useful, or for the single-scale-only sections below.
 
 For ranking questions across many candidates (ZIPs, cities, counties), run the same search → query pattern in parallel across the candidate set. Hundreds of parallel calls per turn is fine — VestMap is free and unlimited.
 
@@ -59,8 +59,9 @@ If the user gave a ZIP or city (no street address), silently omit the Block Grou
 ## Hard rules
 
 1. **No fabrication.** Every number comes from a tool result.
-2. **Omit, don't fill.** Null / blank / "No data found" → drop that row. Never write "N/A", never approximate, never substitute a value from another scale or from `get_section_data` into a row labeled as canonical.
+2. **Omit, don't fill.** Null / blank / "No data found" → drop that row. Never write "N/A", never approximate, never substitute a value from one scale into another scale's row.
 3. **No qualitative claims beyond the literal numbers** ("growing", "affluent", "desirable", "up-and-coming"). No recommendations. Describe the numbers, don't interpret them.
 4. **Skip computations with missing inputs.** If any input field is null at a scale, drop that scale's row — don't partial-sum, don't interpolate.
-5. **Never call `generate_vestmap_report`** unless the user explicitly says "DISCERN" or "full VestMap report".
-6. **VestMap is free and unlimited.** Never call `vestmap_account` as a pre-flight check, never warn about call volume, never ask the user to confirm before bulk or ranking work.
+5. **Different scales differ — that's the point, not an anomaly.** Block Group, Tract, and ZIP are different geographic areas, so their values for the same metric will differ, often a lot. Report the numbers as-is. Never call the difference a "divergence", "anomaly", "discrepancy", "conflict", or "mismatch". Never "verify", "cross-check", "sanity-check", "double-check", or "reconcile" one scale against another or against a "canonical" field. There is one field per metric; you queried it at three scales; you report the three numbers. Done.
+6. **Never call `generate_vestmap_report`** unless the user explicitly says "DISCERN" or "full VestMap report".
+7. **VestMap is free and unlimited.** Never call `vestmap_account` as a pre-flight check, never warn about call volume, never ask the user to confirm before bulk or ranking work.

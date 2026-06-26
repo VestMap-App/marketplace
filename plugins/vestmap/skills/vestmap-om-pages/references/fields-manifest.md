@@ -9,7 +9,7 @@ Custom-mode runs (user uploaded a screenshot/OM, or named non-default
 fields) are NOT constrained by this manifest. See `SKILL.md §Custom Mode`.
 
 Conventions:
-- `tier` follows `vestmap/references/fields.md` (Tier 1 most reliable, higher tiers progressively riskier).
+- `tier` is a reliability hint (Tier 1 most reliable, higher tiers progressively riskier; Tier X = forecast field).
 - `scales` lists the layer paths where the field is verified queryable.
 - `om_label` is the on-page label.
 

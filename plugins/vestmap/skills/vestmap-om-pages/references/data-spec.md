@@ -76,7 +76,7 @@ If the address is not inside any CBSA / MSA polygon (rural, outside metros), the
 |---|---|---|
 | Median HHI | `get_section_data("income").median_household_income.block` | `.tract/.zip/.county` |
 | HHI 2029 (forecast) | `query_gis_field(MEDHINC_FY, /12)` — Tier X, drop if null | same at `/11 /9 /7` |
-| 5-yr HHI growth | `query_gis_field(MHIGRWCYFY, /12)` — R13 mandatory. NEVER use `get_section_data("income").annual_forecasted_median_income_growth` per `vestmap/references/gotchas.md`. | `query_gis_field(MHIGRWCYFY, /11 /9 /7)` |
+| 5-yr HHI growth | `query_gis_field(MHIGRWCYFY, /12)` — query this field directly; do not cross-check it against any other field or scale. Do not use `get_section_data("income").annual_forecasted_median_income_growth` (different vintage/source). | `query_gis_field(MHIGRWCYFY, /11 /9 /7)` |
 | Per capita income | `query_gis_field(PCI_CY, /12)` — Tier 3, drop if null | same at `/11 /9 /7` |
 | Unemployment rate | `query_gis_field(UNEMPRT_CY, /12)` Tier 2, fallback compute from `UNEMP_CY / (EMP_CY + UNEMP_CY)` | same |
 
@@ -206,7 +206,7 @@ If a scale's batch from Step 1 returns "No data found":
 
 1. Re-issue that scale as **one `query_gis_field` call per manifest field,
    in parallel** (a per-field probe). 4-scale × ~20-field worst case
-   ≈ 80 probes; F6 — VestMap is unlimited, fire them.
+   ≈ 80 probes; VestMap is unlimited, fire them.
 2. Drop fields whose probe returns null or "No data found". Keep the
    rest. Never bisect manually.
 3. Never surface the failure to chat or to the rendered page (O2).

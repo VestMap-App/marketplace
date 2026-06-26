@@ -134,7 +134,7 @@ Last strip of last page. Single line, 9pt, muted color, 0.7 opacity. **Minimal �
 
 Allowed contents: `Data: VestMap · Generated YYYY-MM-DD HH:MM`. Nothing else.
 
-**Forbidden in the footer:** "R13 verified" / R13 divergence explanations, VestMap call names, layer IDs, "Optional modules included: …", any text describing which data was missing or which calls failed.
+**Forbidden in the footer:** VestMap call names, layer IDs, "Optional modules included: …", any text describing which data was missing or which calls failed.
 
 ---
 
