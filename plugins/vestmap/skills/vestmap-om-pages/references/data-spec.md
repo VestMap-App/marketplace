@@ -14,7 +14,7 @@ Top of page. No cross-scale comparison.
 |---|---|---|
 | Address (H1) | user-supplied | Exactly as given. NO eyebrow label above (no "Offering Memorandum", no "OM"). |
 | City, State · County · ZIP (locality line) | geocode lookup | |
-| Map | Leaflet + ESRI tile layer | **Default-on.** Remove the `.hero__map` div only if geocoding fails. |
+| Map | Leaflet + **blank ESRI base** (Light Gray Canvas) | **Default-on.** A clean, near-empty basemap + pin so the address reads clearly. Remove the `.hero__map` div only if geocoding fails. |
 
 ### Lat / Lng (map pin)
 
@@ -27,6 +27,18 @@ Top of page. No cross-scale comparison.
 Surface the result into the template as `{{LAT}}` / `{{LNG}}`. **Never estimate** and **never call an external geocoder** (Nominatim, ArcGIS World Geocoder, Google, Mapbox, etc.). **Never use** `urllib` / `requests` / `curl` / `wget` / `web_fetch` / browser `fetch` to acquire coords — the sandbox blocks them and the map fails silently. The right answer when VestMap MCP can't produce coords is step 3, not an outside retry.
 
 Not on the hero: Tapestry pill, safety pill. None of these are in the header by default.
+
+---
+
+## Section maps — VestMap `show_map`
+
+Sections with a matching VestMap layer render a thematic map beside their data (two-up). Full rules in `SKILL.md §O8b`; visual + snapshot process in `layout.md §3.5a` / `§9a`.
+
+- **One call per OM:** `show_map(address)` with **no** `section` → all 7 layer URLs at once. Parse `- **{Label}**: {url}` bullets; match **by label** (order is unstable). `hpi` → `House Price Index`.
+- **Mapping:** Population → `Expansion`, Income → `Income`, Housing Values → `House Price Index`, Safety → `Crime`, Schools (opt-in) → `Schools`. **Rental Market and Workforce have no layer → no map.**
+- **Images by default:** snapshot each selected URL to a local PNG (`scripts/render-vestmap-map.sh`); fill `{{*_MAP_IMG}}` (`file://` path) + `{{*_MAP_URL}}` (share URL). Snapshots run in the background, in parallel with Steps 1–3 of the acquisition recipe below.
+- **Domain is environment-dependent** — use returned URLs verbatim, never construct. Links **expire in 90 days**; the embedded PNG is the permanent artifact, the link a bonus. Do NOT add an expiry note to the page or footer (O2 + `layout.md §3.6`).
+- **No geocode validation:** `show_map` returns URLs even for a garbage address — never treat its success as proof the address geocoded. The `get_section_data` gate already prevents no-data pages.
 
 ---
 
@@ -147,6 +159,7 @@ No safety label pill in the hero. No ZIP/City/State crime-index comparison — V
 - **Trigger:** "include schools"
 - **Source:** `get_section_data(address, "schools")`
 - **Payload:** district + 3 nearest schools with rating + URL if returned.
+- **Map:** `Schools` layer via `show_map` (O8b), beside the module.
 
 ### Education breakdown (5 buckets)
 - **Trigger:** "education", "degree attainment"
@@ -192,6 +205,10 @@ Fire all of these in parallel:
    call carrying *every* `demographics_2024` field listed in the manifest
    that's marked queryable at that scale. One call per scale, four
    scales total.
+7. `show_map(address)` (no `section`) — all 7 section-map URLs in one
+   call. Immediately launch background snapshots for the mapped sections
+   (O8b, `layout.md §9a`); they render while Steps 2-3 proceed. Skip in
+   links-only mode.
 
 Opt-in modules add their specified queries to the same parallel batch.
 

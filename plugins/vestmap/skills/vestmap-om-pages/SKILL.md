@@ -77,7 +77,7 @@ If a value is missing, the cell is invisible (CSS `display:none`). If a row has 
 
 Do NOT substitute. Do NOT add a crime / safety / risk callout to the header. Do NOT use ZIP-level HHI if Block is missing (drop the whole callout cell instead — O2 + R9).
 
-**O8. Map is default-on.** Every OM has the Leaflet+ESRI hero map rendered unless geocoding literally fails (in which case the `.hero__map` div is removed). Do not make the user opt in to the map.
+**O8. Maps are default-on.** Every OM has the hero map at the top — Leaflet + a **blank ESRI base** (Light Gray Canvas) with the address pin — unless geocoding literally fails (then the `.hero__map` div is removed). In addition, every section that has a matching VestMap map layer carries a thematic map beside its data (see O8b). Do not make the user opt in to maps.
 
 **O8a. Geocoding policy — VestMap MCP only.** Lat/lng for the hero map come exclusively from VestMap MCP responses. Acquisition order:
 
@@ -87,7 +87,18 @@ Do NOT substitute. Do NOT add a crime / safety / risk callout to the header. Do 
 
 **Forbidden, no exceptions:** external HTTPS geocoders (`nominatim.openstreetmap.org`, `geocode.arcgis.com`, Google Maps, Mapbox, anything else); `python3 urllib` / `requests` / `curl` / `wget` shell-outs to any geocoder; `mcp__workspace__web_fetch` for coords; browser `fetch`; any path that leaves the VestMap MCP. The sandbox blocks them and the only outcome is wasted turns plus no map. If VestMap MCP can't surface coords, ship the OM without a map (per O8) — do NOT reach outside.
 
-**O9. Self-contained HTML before PDF conversion.** All CSS inline. The only external asset is the Leaflet CDN + ESRI tile layer. Before you open the HTML in headless Chrome to export the PDF, the HTML must be able to open standalone in a browser.
+**O8b. Section maps — VestMap `show_map`, images by default.** Each section that has a matching VestMap layer carries a thematic map beside its data (two-up).
+
+1. **One call per OM.** Call `mcp__VestMap_Real_Estate_Intelligence__show_map(address)` with **no** `section` param, in the same parallel batch as the `get_section_data` calls. It returns all 7 layer URLs at once; per-section calls only mint duplicate tokens for the same maps. Parse the markdown bullets (`- **{Label}**: {url}`) and select **by label** — bullet order is not stable. `hpi`'s label is `House Price Index`.
+2. **Section → layer:** Population Profile → `Expansion`, Income Profile → `Income`, Housing Values → `House Price Index`, Safety → `Crime`. Opt-in Schools module → `Schools`. **Rental Market and Workforce have no layer — they get NO map.** Do not invent mappings for the unused `Demographics` / `Neighborhood` layers.
+3. **Images by default.** Snapshot each selected URL to a local PNG with `scripts/render-vestmap-map.sh <url> <out.png>`, then fill the section's `{{*_MAP_IMG}}` slot (a `file://` path) and `{{*_MAP_URL}}` slot (the share URL, **verbatim**). The image is wrapped in the live link. See `layout.md §9a`.
+4. **Performance (the load-time constraint).** Fire `show_map` first, then launch all snapshots in the background in parallel (cap ~4) so they render **while** the rest of data acquisition, delta computation, and the R9/R11 sweep run. `wait` for them only just before the PDF export. Section maps are static PNGs, so the final PDF pass does **not** wait on live tiles for them (only the single Leaflet hero still loads live).
+5. **Silent degradation (O2).** If `show_map` fails, a snapshot returns blank/failed, or a section has no matching layer: delete that section's `.section__map` div **and** its `section--mapped` class so the section spans full width — exactly like the R9/R11 sweep. NEVER a placeholder, a "map unavailable" note, or an empty card.
+6. **Links-only mode.** If the user says "links only" / "no map images" / "fast", or Chrome/swiftshader is unavailable, or every snapshot fails: skip snapshots. Drop `.section--mapped`/`.section__map` and add `<div class="section__maplink"><a href="{url}">Explore {Label} map ↗</a></div>` after each mapped section's header. Near-zero added time.
+7. **`show_map` does NOT validate the address** (a garbage address still returns URLs). Harmless: the OM already requires real `get_section_data`, so a no-data address never produces a page. Never treat `show_map` success as evidence the address geocoded.
+8. **Not a rule violation.** Snapshotting a VestMap-issued share URL in headless Chrome is a build step producing a **local** PNG; the final HTML embeds local images and stays self-contained. This does not breach O8a/O9 — those forbid sourcing *data/coords* outside VestMap, not rendering VestMap's own map URLs. Never construct or rewrite a map URL; the domain is environment-dependent, so use exactly what `show_map` returned.
+
+**O9. Self-contained HTML before PDF conversion.** All CSS inline. External assets are limited to the Leaflet CDN + ESRI tile layer (hero only); section maps are **local** PNG snapshots referenced by `file://` (O8b). Before you open the HTML in headless Chrome to export the PDF, the HTML must be able to open standalone in a browser.
 
 **O10a. Every number must trace to a VestMap tool call.** If you cannot name the specific VestMap tool call (`get_section_data`, `query_gis_field`, or `search_real_estate_data`) that produced a value, that value does not appear on the page. No exceptions, no inference, no filling in from memory.
 
@@ -107,6 +118,8 @@ Do NOT substitute. Do NOT add a crime / safety / risk callout to the header. Do 
 7. **Workforce** — 4-scale: 4 occupation buckets (Mgmt / Sales / Prod / Cons) + white/blue collar share + per-scale stacked bars.
 8. **Safety** — Block Group raw crime counts from VestMap (3×3 grid). Per-capita line only when `TOTPOP_CY` at Block returned.
 
+Sections with a matching VestMap layer — **Population, Income, Housing Values, Safety** — render two-up with a thematic map beside the data (O8b). Rental Market and Workforce have no map layer and stay full-width.
+
 See `data-spec.md` for exact field-level data sources and `layout.md` for visual rules.
 
 ## Opt-in modules (never rendered by default)
@@ -116,7 +129,7 @@ Added only when the user explicitly names them:
 | Trigger phrase | Module |
 |---|---|
 | "include risk", "FEMA", "hazards" | FEMA NRI (Tract only) |
-| "include schools" | Nearest 3 schools + district |
+| "include schools" | Nearest 3 schools + district (with a `Schools` map, per O8b) |
 | "education", "degree attainment" | 5-bucket education by scale |
 | "income distribution", "HINC buckets" | 9-bucket income distribution by scale |
 | "all occupations", "13 occupation buckets" | Full 13-bucket workforce |
@@ -132,13 +145,15 @@ Details in `data-spec.md §Optional Modules`.
    - Required always: `get_section_data(address, "income" | "expansion" | "crime")`, plus per-scale `query_gis_field` calls at `/12` (Block), `/11` (Tract), `/9` (ZIP), `/7` (County).
    - **Field names come from `references/fields-manifest.md`.** Any field not listed in the manifest requires a `search_real_estate_data` discovery step before its first `query_gis_field` — never guess Esri field names from memory or training data. This is how stale names like the deprecated `MEDRENT_CY` get caught before they poison a batch.
    - MSA lookup: `search_real_estate_data("Metropolitan Statistical Area")` once per session → query CBSA name (verbatim) + N01_BUS/N01_EMP fields (name used in the context band; business counts only kept if the user opted in to the Business module).
+   - **Section maps:** one `show_map(address)` call (no `section`) in this same parallel batch → all 7 layer URLs. Parse by label; select `Expansion` (Population), `Income`, `House Price Index` (Housing), `Crime` (Safety), + `Schools` if opted in. See O8b + `layout.md §9a`. (Skip in links-only mode.)
    - Optional modules: only if triggered.
    - **Poison-pill recovery is automatic.** If any `query_gis_field` batch returns "No data found", run the per-field probe fallback in `data-spec.md §Block Acquisition Step 2`. Do not bisect manually. Do not surface the failure.
-3. **Compute deltas.** For every metric with ≥2 non-null scale values, compute absolute + ratio/percentage deltas per `layout.md §2`.
-4. **R9/R11 sweep.** Remove empty cells, empty rows, empty sections from the DOM before rendering.
-5. **Render HTML** to a temp file.
-6. **Convert to PDF** via headless Chrome (`layout.md §9`). Output path: `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf` in the current working directory.
-7. **Respond.** Print the PDF path, one sentence naming the subject address. Stop.
+3. **Launch map snapshots (background, parallel).** Immediately after `show_map` returns, kick off `scripts/render-vestmap-map.sh <url> <out.png>` for each selected map, in the background (cap ~4 concurrent). They render *while* steps 4–6 run — do not block on them here. (Skip in links-only mode.)
+4. **Compute deltas.** For every metric with ≥2 non-null scale values, compute absolute + ratio/percentage deltas per `layout.md §2`.
+5. **R9/R11 sweep.** Remove empty cells, empty rows, empty sections from the DOM before rendering.
+6. **Render HTML** to a temp file. For each mapped section, fill `{{*_MAP_IMG}}` (`file://` path) + `{{*_MAP_URL}}` (share URL); for any section whose snapshot failed/blank, delete its `.section__map` div and `section--mapped` class (silent shrink, O8b.5).
+7. **Convert to PDF** via headless Chrome (`layout.md §9`). `wait` for the background snapshots first. Output path: `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf` in the current working directory.
+8. **Respond.** Print the PDF path, one sentence naming the subject address. Stop.
 
 ## Gotchas
 

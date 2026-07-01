@@ -132,3 +132,21 @@ Per-hazard nulls (e.g., riverine flood on a barrier island) trigger the
 poison-pill fallback because the API treats nulls the same as missing
 fields. The acquisition recipe handles this automatically — see
 `data-spec.md §Block Acquisition`.
+
+---
+
+## Maps: `show_map` section labels (not query fields)
+
+`show_map(address)` (no query fields — see `SKILL.md §O8b`) returns one URL per
+layer. Labels are fixed; **match by label, not position** (bullet order is not
+stable). Note `hpi` → `House Price Index`.
+
+| Enum value | Response label | Used by OM section |
+|---|---|---|
+| `expansion` | `Expansion` | Population Profile |
+| `income` | `Income` | Income Profile |
+| `hpi` | `House Price Index` | Housing Values |
+| `crime` | `Crime` | Safety |
+| `schools` | `Schools` | Schools (opt-in) |
+| `demographics` | `Demographics` | — (unused) |
+| `neighborhood` | `Neighborhood` | — (unused) |

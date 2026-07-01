@@ -124,6 +124,51 @@
     border: 1px solid var(--line);
   }
 
+  /* -------- Per-section thematic map (two-up, beside the table) --------
+     A "mapped" section wraps its existing content in `.section__body` (left)
+     and a VestMap map card in `.section__map` (right). The map is a STATIC
+     snapshot PNG filled at render time — NOT client-side JS (the hero Leaflet
+     map is still the only JS on the page, per layout.md §8).
+
+     Silent-shrink (O2): if a section has no map (no matching layer, snapshot
+     blank/failed, or links-only mode), the render step deletes `.section__map`
+     AND removes the `section--mapped` class, so the section spans full width
+     exactly like an unmapped section. Never leave an empty map card. */
+  .section--mapped {
+    display: grid;
+    grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+    gap: 0.22in;
+    align-items: start;
+  }
+  .section--mapped .section__body { min-width: 0; }
+  /* The wide 4-scale table loses ~35% width beside the map — trim the value
+     font and cell padding so Block · Tract · ZIP · County stay legible even
+     with 7-digit dollar values (e.g. $1,032,767 median home value). */
+  .section--mapped .cmp-cell__value { font-size: 11pt; letter-spacing: -0.02em; }
+  .section--mapped .cmp-cell { padding: 8px 3px 6px 3px; }
+
+  .section__map {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    height: 2.4in;
+    background: var(--surface-alt);
+  }
+  .section__map a { display: block; width: 100%; height: 100%; }
+  .section__map img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;      /* crop the VestMap SPA chrome (top bar / chat bubble) */
+    object-position: center;
+    display: block;
+  }
+
+  /* Links-only mode: a compact affordance under the section header instead of a
+     map card. The render step drops `.section--mapped`/`.section__map` and adds
+     one of these after the section header. */
+  .section__maplink { margin: 2px 0 8px; font-size: 9pt; }
+  .section__maplink a { color: var(--accent); text-decoration: none; font-weight: 500; }
+
   /* -------- Context band — 3 big-number callouts (left-accent-bar) ----- */
   .context-band {
     display: grid;
@@ -418,7 +463,8 @@
 </section>
 
 <!-- =========================================================================
-     PAGE 2 · Default comparison sections
+     PAGE 2 · Population / Income / Housing (thematic map beside each).
+     Rental / Workforce / Safety continue on page 3 so the maps don't overflow.
      Pattern for every section below: layout.md §2
      - <div class="cmp-header"> establishes the 4 scale columns
      - Each <tr class="cmp-row"> is one metric
@@ -430,8 +476,9 @@
      ========================================================================= -->
 <section class="page">
 
-  <!-- ========== Population Profile ====================================== -->
-  <section class="section">
+  <!-- ========== Population Profile · map: show_map "Expansion" ========== -->
+  <section class="section section--mapped">
+    <div class="section__body">
     <div class="section__header">
       <h2>Population Profile</h2>
       <span class="scale-header">Block · Tract · ZIP · County</span>
@@ -528,10 +575,19 @@
 
       </tbody>
     </table>
+    </div><!-- /.section__body -->
+    <!-- VestMap population-growth map (show_map "Expansion"). Fill {{POP_MAP_IMG}}
+         with the file:// path to the snapshot PNG and {{POP_MAP_URL}} with the
+         share URL. No map (blank/failed/links-only) → delete this .section__map
+         div AND the `section--mapped` class above so the section spans full width. -->
+    <div class="section__map">
+      <a href="{{POP_MAP_URL}}"><img src="{{POP_MAP_IMG}}" alt="Population growth map"></a>
+    </div>
   </section>
 
-  <!-- ========== Income Profile ========================================== -->
-  <section class="section">
+  <!-- ========== Income Profile · map: show_map "Income" ================= -->
+  <section class="section section--mapped">
+    <div class="section__body">
     <div class="section__header">
       <h2>Income Profile</h2>
       <span class="scale-header">Block · Tract · ZIP · County</span>
@@ -616,10 +672,19 @@
 
       </tbody>
     </table>
+    </div><!-- /.section__body -->
+    <!-- VestMap income map (show_map "Income"). Fill {{INCOME_MAP_IMG}} with the
+         file:// path to the snapshot PNG and {{INCOME_MAP_URL}} with the share
+         URL. No map (blank/failed/links-only) → delete this .section__map div
+         AND the `section--mapped` class above so the section spans full width. -->
+    <div class="section__map">
+      <a href="{{INCOME_MAP_URL}}"><img src="{{INCOME_MAP_IMG}}" alt="Income map"></a>
+    </div>
   </section>
 
-  <!-- ========== Housing Values ========================================== -->
-  <section class="section">
+  <!-- ========== Housing Values · map: show_map "House Price Index" ====== -->
+  <section class="section section--mapped">
+    <div class="section__body">
     <div class="section__header">
       <h2>Housing Values</h2>
       <span class="scale-header">Block · Tract · ZIP · County</span>
@@ -675,7 +740,26 @@
         </tr>
       </tbody>
     </table>
+    </div><!-- /.section__body -->
+    <!-- VestMap home-value map (show_map "House Price Index"). Fill {{HV_MAP_IMG}}
+         with the file:// path to the snapshot PNG and {{HV_MAP_URL}} with the
+         share URL. No map (blank/failed/links-only) → delete this .section__map
+         div AND the `section--mapped` class above so the section spans full width. -->
+    <div class="section__map">
+      <a href="{{HV_MAP_URL}}"><img src="{{HV_MAP_IMG}}" alt="Home value map"></a>
+    </div>
   </section>
+
+</section>
+
+<!-- =========================================================================
+     PAGE 3 · Rental / Workforce / Safety
+     Split out of page 2 so the added per-section maps don't overflow a single
+     sheet (each mapped section is ~2.4in tall). Keep ~2-3 mapped sections per
+     page; if the R9/R11 sweep drops sections or opt-in modules are added,
+     rebalance these page breaks so no `.page` overflows (layout.md §3.5a, §6).
+     ========================================================================= -->
+<section class="page">
 
   <!-- ========== Rental Market =========================================== -->
   <section class="section">
@@ -834,8 +918,9 @@
     </div>
   </section>
 
-  <!-- ========== Safety / Crime ========================================== -->
-  <section class="section">
+  <!-- ========== Safety / Crime · map: show_map "Crime" ================== -->
+  <section class="section section--mapped">
+    <div class="section__body">
     <div class="section__header">
       <h2>Safety</h2>
       <span class="scale-header">Block Group · offense counts</span>
@@ -857,6 +942,14 @@
       <div style="margin-top:0.10in;font-size:9pt;color:var(--muted);">
         Per 1,000 residents (Block pop {{POP_BLOCK}}): <strong>{{CRIME_PER_1K}}</strong>
       </div>
+    </div>
+    </div><!-- /.section__body -->
+    <!-- VestMap crime map (show_map "Crime"). Fill {{CRIME_MAP_IMG}} with the
+         file:// path to the snapshot PNG and {{CRIME_MAP_URL}} with the share
+         URL. No map (blank/failed/links-only) → delete this .section__map div
+         AND the `section--mapped` class above so the section spans full width. -->
+    <div class="section__map">
+      <a href="{{CRIME_MAP_URL}}"><img src="{{CRIME_MAP_IMG}}" alt="Crime map"></a>
     </div>
   </section>
 
@@ -942,9 +1035,14 @@
         fadeAnimation: false,
         zoomAnimation: false
       }).setView([lat, lng], 13);
+      // Blank ESRI base (Light Gray Canvas) — a clean, near-empty basemap so the
+      // subject pin/address reads clearly (per SKILL.md O8). This is a base-only
+      // layer with no reference labels; to add city/street labels, stack the
+      // sibling `Canvas/World_Light_Gray_Reference` tile layer. Max native zoom
+      // for this service is 16.
       var tiles = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-        { attribution: 'Tiles &copy; Esri', maxZoom: 19, crossOrigin: true }
+        'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        { attribution: 'Tiles &copy; Esri', maxZoom: 16, crossOrigin: true }
       ).addTo(map);
       L.marker([lat, lng]).addTo(map);
       tiles.on('load', function () {

@@ -8,7 +8,8 @@ Offering Memorandum pages, and rental-property pro formas.
 - **`vestmap`** — Ask any question about a US address: demographics, income, housing, workforce,
   crime, schools, hazards, and market trends, answered with clear comparison tables.
 - **`vestmap-om-pages`** — Generate a presentation-ready Offering Memorandum (OM) page for any US
-  address as a PDF.
+  address as a PDF, with a clean base map locating the address and VestMap thematic maps
+  (income, crime, population growth, home values) beside each section.
 - **`rental-property-analyzer`** — Turn a rent roll + T12 + loan terms into an investor-grade pro
   forma: an editable Excel model (Current vs. Proforma, NOI, cap rate, DSCR, cash-on-cash, loan
   amortization, multi-year projection) plus a polished PDF report with a KPI dashboard and charts.
