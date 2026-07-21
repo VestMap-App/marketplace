@@ -1,253 +1,357 @@
 ---
 name: vestmap-om-pages
-description: Render a property Offering Memorandum (OM) page for any US address — a visual, page-oriented PDF (default output) showing demographics, income, housing, workforce, and safety at Block / ZIP / City / County scales with explicit cross-scale comparisons. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a property. The page is market-agnostic — no city-specific wording, no carve-outs. Block-level data is added by default. Optional modules (Risk, Schools, Education detail, HPI, full income distribution, all 13 occupations, Business/MSA) are NOT rendered by default; they appear only on explicit request. Delegates all Block / Tract / ZIP / County data acquisition to the `vestmap` skill and follows its hard rules.
+description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). Shows Population, Income, Housing, and Rental at Block / Tract / ZIP / County scale with explicit cross-scale deltas, plus a Safety block (Block-Group crime index) and section-matched VestMap data maps. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, and PDF steps; it needs no other file. Optional modules (Workforce, Risk, Schools, Education, Income distribution, Businesses, HPI) render only when the user names them.
 user-invocable: true
 ---
 
-# VestMap OM Pages Skill
+# VestMap OM Pages
 
-Render Offering Memorandum pages for US addresses. Single-address, page-oriented, PDF-first output.
+Generate a presentation-ready Offering Memorandum PDF for a single US address. All numbers come from VestMap MCP tool calls; each mappable section carries its own matching VestMap map image. This file is **self-contained**: the layout, the full HTML/CSS template, and the PDF command are all below — do not look for or depend on any `references/…` or `templates/…` file, and do not fetch anything over the network for page content beyond the VestMap map images.
 
-This skill is a **rendering + data-curation layer on top of the `vestmap` skill**. It defines exactly which fields appear by default, how values flow from source data into the page, and how the page is laid out so comparisons across scales are legible. It does NOT define new data rules — those live in the parent `vestmap` skill.
+## Hard rules
 
-## When to use this skill
-
-Trigger on any of:
-- User asks for an "OM", "offering memorandum", "one-pager", "investor page", "marketing page", "property page", "property brief page"
-- User asks to "render" or "lay out" demographic / market data for a property as a page
-- User asks for a rendered / formatted page for any US address
-- User asks for a comparison page across Block / ZIP / City / County
-
-Do NOT trigger for: plain ranking tables, data dumps, one-liners, "what's the median income here", "which ZIP has…". Those stay on the base `vestmap` skill.
-
-## Inheritance from `vestmap`
-
-Everything the parent skill's hard rules enforce still applies. In particular:
-
-- **No Tapestry for hard metrics** — OM numbers come from `get_section_data("income"|"expansion"|"crime"|"schools")` and `query_gis_field` Tier 1 fields. NEVER from `get_section_data("demographics")`. NO Tapestry segment names on the page (no "Tapestry Grade", no lifestyle pill).
-- **Explicit cross-scale comparisons** — every multi-scale metric shows deltas/ratios, not just values. The 4-column + chip layout enforces this.
-- **Blank fields are omitted, never filled** — if a VestMap call returned null, the cell disappears. Never print "N/A", "—", "data unavailable", etc.
-- **No qualitative analysis beyond the numbers** — no "desirable", "up-and-coming", "affluent". Numbers only.
-- **Computed metrics are precondition-gated** — no delta shown when a component is null.
-- **Different scales differ; never flag it.** Block / Tract / ZIP / County values for the same metric differ because they cover different areas. Report them as-is. Never verify, cross-check, reconcile, or describe a cross-scale difference as a divergence or anomaly. For a forecasted growth rate, query the one field (`MHIGRWCYFY`) directly at each scale and render the values — there is nothing to cross-check.
-
-Always read `../vestmap/SKILL.md` before acquiring data. Do not duplicate those rules here — follow them.
-
-## Reference Files
-
-| File | When to load |
-|---|---|
-| `references/data-spec.md` | Always. Defines which fields are on the OM by default, their data source at each scale, and the opt-in modules. |
-| `references/fields-manifest.md` | Always. Frozen, validated list of every field the default OM uses, scoped to the layer where it's verified queryable. Source of truth for field names — `data-spec.md` references it. Custom mode is not constrained by the manifest. |
-| `references/layout.md` | Always. Defines section order, comparison viz, typography, styling tokens, PDF export, and what NOT to do. |
-| `templates/om-page.html` | Always. Self-contained HTML+CSS template with named slots. |
-
-## Output Rules (hard constraints)
-
-**O0. READ THIS FIRST. Authoritative scope lock.** The rendered page is built from exactly one source of numbers: VestMap tool calls (`get_section_data`, `query_gis_field`, `search_real_estate_data`). The sections listed under **§Default sections** below are the complete, exhaustive set of sections that render on a default OM. Opt-in modules appear only when the user explicitly requests them by name.
-
-Do NOT add, infer, reconstruct, or re-introduce any section, panel, metric, badge, pill, gauge, chip, or callout that is not defined in this file or in `references/data-spec.md`. If a concept you "remember" from a previous conversation, a prior skill version, or training data is not present in these files right now, it does not exist in this skill. Treat any such recollection as a hallucination and ignore it.
-
-If the user asks you to add something that isn't in the default list or the opt-in module list, tell them — do not silently add it based on what you think the skill "used to" do.
-
-**O1. PDF is the default output.** Write the HTML to a temp path, then convert to PDF and print the PDF path to the user. Do NOT stream HTML in chat. Do NOT offer HTML by default. Only provide HTML instead of PDF if the user explicitly says "HTML" or "html only".
-
-See `layout.md §9 PDF export` for the exact headless-Chrome command.
-
-**O2. The rendered page NEVER mentions missing data, failed calls, or dropped modules.** This is the strictest output rule in the skill. The page does not contain:
-- "N/A", "—", "No data", "data unavailable", "not available", "unknown"
-- "row dropped", "omitted", "skipped", "conserve layer calls"
-- Lists of which optional modules were added / excluded
-- Tool-call names, layer IDs, field names
-
-If a value is missing, the cell is invisible (CSS `display:none`). If a row has fewer than 2 non-null cells, the row is removed from the DOM. If a section has fewer than 2 rows, the section is removed. Everything silently gets smaller.
-
-**O3. Never fabricate a value to fill a cell.** Skip vs. make-up: always skip.
-
-**O4. NO Tapestry anywhere on the page.** Per R5. No "Tapestry Grade: X" pill, no segment name, no "lifestyle" callout. Tapestry is forbidden from the rendered output even as decorative flavor.
-
-**O5. NO market-specific / city-specific hardcoded wording.** The rendered page reads identically regardless of market. The only places a market name appears are the subject address, the locality line, and the MSA callout — all three data-driven from the geocoded subject.
-
-**O6. The header does NOT say "Offering Memorandum".** No eyebrow text above the address. No document-type label. Just the address as the H1. The user wants this. Do not add it back.
-
-**O7. The context band (3 big-number callouts at top of page 1) is FIXED in content:**
-1. **Median HHI at Block** (label: "Median HHI · Block"; value: from `get_section_data("income").median_household_income.block`)
-2. **Population growth % at ZIP** (label: "Pop Growth · ZIP, 5-yr CAGR"; value: from `get_section_data("expansion").zip`)
-3. **MSA name** (label: "MSA"; value: MSA/CBSA name from `search_real_estate_data("CBSA")` or `Enriched_USA_Metropolitan_Statistical_Areas/FeatureServer/0`)
-
-Do NOT substitute. Do NOT add a crime / safety / risk callout to the header. Do NOT use ZIP-level HHI if Block is missing (drop the whole callout cell instead — O2 + R9).
-
-**O8. Map is default-on.** Every OM has the Leaflet+ESRI hero map rendered unless geocoding literally fails (in which case the `.hero__map` div is removed). Do not make the user opt in to the map.
-
-**O8a. Geocoding policy — VestMap MCP only.** Lat/lng for the hero map come exclusively from VestMap MCP responses. Acquisition order:
-
-1. **Primary.** Every `get_section_data(address, ...)` response normally surfaces `lat` / `lng` (or equivalent) in the payload. Read it from whichever section call you've already fired (`income`, `expansion`, `crime`) — you don't need an additional call.
-2. **Fallback.** If no surfaced coords, run `search_real_estate_data("geocode")` once to discover the geocoding feature service, then `query_gis_field` against that service to pull the coords for the subject address.
-3. **Failure.** If both 1 and 2 return nothing, the template script removes the `.hero__map` div and adds `.no-map` to `.summary-row` so the summary card spans the full width. **That is the only fallback.** The OM ships without a map.
-
-**Forbidden, no exceptions:** external HTTPS geocoders (`nominatim.openstreetmap.org`, `geocode.arcgis.com`, Google Maps, Mapbox, anything else); `python3 urllib` / `requests` / `curl` / `wget` shell-outs to any geocoder; `mcp__workspace__web_fetch` for coords; browser `fetch`; any path that leaves the VestMap MCP. The sandbox blocks them and the only outcome is wasted turns plus no map. If VestMap MCP can't surface coords, ship the OM without a map (per O8) — do NOT reach outside.
-
-**O9. Self-contained HTML before PDF conversion.** All CSS inline. The only external asset is the Leaflet CDN + ESRI tile layer. Before you open the HTML in headless Chrome to export the PDF, the HTML must be able to open standalone in a browser.
-
-**O10a. Every number must trace to a VestMap tool call.** If you cannot name the specific VestMap tool call (`get_section_data`, `query_gis_field`, or `search_real_estate_data`) that produced a value, that value does not appear on the page. No exceptions, no inference, no filling in from memory.
-
-**O10. Chat response after generation is minimal.** After writing the PDF:
-- Print the PDF path
-- One sentence stating the subject address
-- Stop. Do not list which sections rendered vs dropped. Do not apologize for missing data. Do not announce which opt-in modules were / weren't added unless the user explicitly asked for specific modules and one genuinely didn't materialize.
-
-## Default sections (always rendered when data is present)
-
-1. **Header** — full-bleed dark-green page-header strip with address (see `layout.md §Styling`), followed by a two-up row: summary table + map.
-2. **Context band** — 3 big-number callouts per O7 (HHI Block · Pop Growth ZIP · MSA).
-3. **Population** — 4-scale comparison: total pop, median age, density, 5-yr pop growth, avg HH size.
-4. **Income** — 4-scale: median HHI, 2029 HHI forecast, 5-yr HHI growth, per-capita income, unemployment rate.
-5. **Housing Values** — 4-scale: median home value, 2029 forecast, 5-yr growth.
-6. **Rental Market** — 4-scale: median rent, renter units, owner units, 2029 renter units, renter share.
-7. **Workforce** — 4-scale: 4 occupation buckets (Mgmt / Sales / Prod / Cons) + white/blue collar share + per-scale stacked bars.
-8. **Safety** — Block Group raw crime counts from VestMap (3×3 grid). Per-capita line only when `TOTPOP_CY` at Block returned.
-
-See `data-spec.md` for exact field-level data sources and `layout.md` for visual rules.
-
-## Opt-in modules (never rendered by default)
-
-Added only when the user explicitly names them:
-
-| Trigger phrase | Module |
-|---|---|
-| "include risk", "FEMA", "hazards" | FEMA NRI (Tract only) |
-| "include schools" | Nearest 3 schools + district |
-| "education", "degree attainment" | 5-bucket education by scale |
-| "income distribution", "HINC buckets" | 9-bucket income distribution by scale |
-| "all occupations", "13 occupation buckets" | Full 13-bucket workforce |
-| "businesses", "MSA data" | Business counts (CBSA) |
-| "HPI" | House Price Index |
-
-Details in `data-spec.md §Optional Modules`.
+- **PDF is the default output.** Write the HTML to a temp file, convert to PDF with headless Chrome (see §PDF), print the PDF path. Only output HTML instead if the user says "HTML" / "html only".
+- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `map_screenshot`, `search_real_estate_data`). If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
+- **Missing data disappears — it is never announced.** If a value is null/blank, drop that cell. If a row has fewer than 2 non-null value cells, drop the row. If a section has fewer than 2 rows, drop the section. For a masthead locality segment with no value (e.g. no MSA), drop that segment **and its trailing `· ` separator** so no empty `· ·` remains. The page never contains "N/A", "—", "data unavailable", tool names, field names, or any note about what was dropped. It just gets smaller. The chat reply after generation is equally quiet (see §Respond).
+- **Different scales differ — that is normal, never a problem.** Block / Tract / ZIP / County cover different areas, so their values differ. Report them as-is. Do not verify, cross-check, reconcile, or describe any cross-scale difference as a divergence/anomaly.
+- **No Tapestry, ever.** Never call `get_section_data("demographics")` for numbers and never put a Tapestry segment/grade/lifestyle label on the page.
+- **No prose claims beyond the numbers.** No "desirable", "up-and-coming", "affluent", "safe". Labels and numbers only.
+- **Market-agnostic.** The page reads identically for any US market. A market name appears only in the address, the locality line, and (data-driven) the MSA. Nothing city-specific is hardcoded.
+- **No "Offering Memorandum" eyebrow.** The masthead is just the address.
 
 ## Workflow
 
-1. **Parse.** Extract subject address. Identify subject ZIP.
-2. **Data acquisition** — run in parallel (see `data-spec.md §Block Acquisition`):
-   - Required always: `get_section_data(address, "income" | "expansion" | "crime")`, plus per-scale `query_gis_field` calls at `/12` (Block), `/11` (Tract), `/9` (ZIP), `/7` (County).
-   - **Field names come from `references/fields-manifest.md`.** Any field not listed in the manifest requires a `search_real_estate_data` discovery step before its first `query_gis_field` — never guess Esri field names from memory or training data. This is how stale names like the deprecated `MEDRENT_CY` get caught before they poison a batch.
-   - MSA lookup: `search_real_estate_data("Metropolitan Statistical Area")` once per session → query CBSA name (verbatim) + N01_BUS/N01_EMP fields (name used in the context band; business counts only kept if the user opted in to the Business module).
-   - Optional modules: only if triggered.
-   - **Poison-pill recovery is automatic.** If any `query_gis_field` batch returns "No data found", run the per-field probe fallback in `data-spec.md §Block Acquisition Step 2`. Do not bisect manually. Do not surface the failure.
-3. **Compute deltas.** For every metric with ≥2 non-null scale values, compute absolute + ratio/percentage deltas per `layout.md §2`.
-4. **R9/R11 sweep.** Remove empty cells, empty rows, empty sections from the DOM before rendering.
-5. **Render HTML** to a temp file.
-6. **Convert to PDF** via headless Chrome (`layout.md §9`). Output path: `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf` in the current working directory.
-7. **Respond.** Print the PDF path, one sentence naming the subject address. Stop.
+1. **Parse** the subject address; note its ZIP.
+2. **Acquire data** — fire all of this in parallel in one turn (VestMap is free and unlimited; never warn about volume):
+   - `get_section_data(address, "income")` → `median_household_income` and `median_home_value` at block/tract/zip/county.
+   - `get_section_data(address, "expansion")` → 5-yr population-growth CAGR at block/tract/zip/county.
+   - `get_section_data(address, "crime")` → the `CRMCY*` crime **indices** at Block Group.
+   - `query_gis_field` batches (≤3 fields each) at the four demographics layers — see §Data.
+   - `query_gis_field(address, <County layer /7>, ["NAME"])` → the **county name** (→ `{{COUNTY}}`); and `query_gis_field(address, <CBSA layer>, ["NAME"])` → the **MSA name** (→ `{{MSA}}`). See §Data.
+   - **Section maps** — one `map_screenshot(address, section)` call per placed map: `neighborhood` (hero), `income` (Income), `hpi` (Housing), `expansion` (Population), `crime` (Safety). See §Maps.
+3. **Compute** the delta chips and the two derived metrics (renter share, HV growth) — see §Computations. Precondition-gate every computation: if a component is null, skip it.
+4. **Sweep** for empties (drop empty cells → thin rows → thin sections; drop empty masthead segments) per the hard rules.
+5. **Fill the template** in §Template with the subject's values and the map URLs.
+6. **Convert to PDF** per §PDF. Output `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf` in the current directory.
+7. **Respond** minimally: the PDF path + one sentence naming the address.
 
-## Gotchas
+## Data — what fills each section
 
-**`query_gis_field` is all-or-nothing on the field list.**
+Demographics layers (`query_gis_field`, ≤3 fields per call, run every field at all four scales in parallel):
 
-- One bad field name (or one null returned value) causes the **entire**
-  call to return `"No data found at … may be outside this layer's
-  coverage area."`
-- That message is **not** a coverage error. Coverage errors return the
-  same string. Treat it as ambiguous.
-- Mitigation:
-  1. Keep field names in `references/fields-manifest.md` and treat that
-     file as the source of truth. Don't inline new field names.
-  2. New fields require a `search_real_estate_data` discovery step before
-     their first `query_gis_field` call.
-  3. On any "No data found" response, the acquisition recipe runs a
-     per-field probe fallback in parallel (one call per field). Drop
-     fields that probe null. Never bisect manually, never surface the
-     failure to chat or to the page (O2).
-
-This applies in both default and custom modes — anywhere the skill calls
-`query_gis_field`, this is the recovery path.
-
-## Custom Mode
-
-The defaults above (`fields-manifest.md`, fixed default sections, locked
-visual styling) describe the **address-only** invocation. When the user
-signals they want a custom render, the manifest no longer constrains
-content and the upload becomes the design source-of-truth.
-
-### Triggers (any of)
-
-- The user attached an image, PDF, or screenshot in the message.
-- The user said "match this design", "match this OM", "use these fields",
-  "custom render", "like this layout", or named specific non-default
-  fields/sections.
-
-If only an address is supplied with no design instruction and no upload,
-run defaults. If an upload is present, treat as custom — the upload
-signals intent.
-
-### Behavior
-
-- Vision-extract layout cues (sections present, palette, type hierarchy,
-  header treatment, section order) from the upload. Treat the upload as
-  the design source-of-truth; the locked styling in `layout.md §6a`
-  becomes a *default* the upload may override.
-- The upload may override **styling** (palette, type, section order,
-  header treatment). It may NOT override the canonical scale set
-  (Block · Tract · ZIP · County) or the default-on hero map — see
-  "Scale translation" below and O8.
-- `references/fields-manifest.md` does **not** constrain content. Any
-  user-named field still routes through `search_real_estate_data`
-  discovery before `query_gis_field`.
-- The poison-pill fallback in `data-spec.md §Block Acquisition Step 2`
-  **still applies** whenever `query_gis_field` is used. Custom mode
-  benefits from it for free.
-
-### Scale translation (radial rings → canonical scales)
-
-VestMap data is queried only at Block (`/12`), Tract (`/11`), ZIP
-(`/9`), and County (`/7`). Radial-ring scales (1/3/5 mile, 0.5/1/3
-mile, drive-time isochrones, etc.) are **not** supported by the data
-layer — there is no mile-radius API.
-
-If the upload labels its comparison columns with mile-radii or other
-radial rings, translate them to the canonical scale set:
-
-| Upload columns                  | Render as                       |
-|---------------------------------|---------------------------------|
-| 2 rings (e.g. 1 / 3 mi)         | Tract · ZIP                     |
-| 3 rings (e.g. 1 / 3 / 5 mi)     | Block · Tract · ZIP             |
-| 4 rings (e.g. 1 / 3 / 5 / 10)   | Block · Tract · ZIP · County    |
-
-Preserve everything else from the upload (palette, type, section order,
-header treatment, comparison patterns like "vs County" deviation
-chips). Only the column labels change. Never display or query a
-mile-radius column — route every column through `query_gis_field` at
-`/12 /11 /9 /7` as usual.
-
-### Hard rules that still hold
-
-- O1 PDF-first output.
-- O2 the rendered page never mentions missing data, failed calls, or
-  dropped modules.
-- O3 never fabricate a value to fill a cell.
-- R5 / O4 no Tapestry anywhere on the page.
-- O8 the Leaflet+ESRI hero map renders unless geocoding fails — even
-  if the upload shows a map placeholder, a grey box, radio-button ring
-  selector, or no map at all. The map is a feature, not a styling
-  token, and is not overridable by the upload.
-- R10 no qualitative analysis beyond the numbers.
-
-## Quick Reference
-
-| User says | Do this |
+| Scale | Layer URL |
 |---|---|
-| "OM for 123 Main St, Denver CO" | Default OM, PDF output. |
-| "OM for <address>, include risk and schools" | Default + Risk + Schools modules. |
-| "OM for <address>, HTML only" | HTML-only output, skip PDF conversion. |
-| "Full OM for <address> with everything" | Default + all opt-in modules. |
-| User uploads a screenshot or OM PDF along with the address | Custom Mode — upload is the design reference; manifest does not constrain content. |
-| "Match this design / layout" / "use these fields" | Custom Mode. |
+| Block | `https://demographics5.arcgis.com/arcgis/rest/services/USA_Demographics_and_Boundaries_2024/MapServer/12` |
+| Tract | `…/USA_Demographics_and_Boundaries_2024/MapServer/11` |
+| ZIP | `…/USA_Demographics_and_Boundaries_2024/MapServer/9` |
+| County | `…/USA_Demographics_and_Boundaries_2024/MapServer/7` |
 
-## What this skill deliberately does NOT do
+| Section | Metric (row) | Source | Chips? |
+|---|---|---|---|
+| **Population** | Total population | `TOTPOP_CY` | yes |
+| | Median age | `MEDAGE_CY` | yes |
+| | Avg HH size | `AVGHHSZ_CY` | yes |
+| | 5-yr pop growth | `get_section_data("expansion")` | yes |
+| **Income** | Median HHI | `get_section_data("income").median_household_income` | yes |
+| | HHI 2029 (forecast) | `MEDHINC_FY` | plain |
+| | 5-yr HHI growth | `MHIGRWCYFY` | yes |
+| | Per capita income | `PCI_CY` | plain |
+| | Unemployment | `UNEMPRT_CY` (fallback `UNEMP_CY / (EMP_CY + UNEMP_CY) × 100`) | yes |
+| **Housing Values** | Median home value | `get_section_data("income").median_home_value` (block/tract/zip); `MEDVAL_CY` at `/7` for County | yes |
+| | HV 2029 (forecast) | `MEDVAL_FY` | plain |
+| | 5-yr HV growth | computed — see §Computations | yes |
+| **Rental Market** | Median rent | `MEDCRNT_CY` (Esri "Median Contract Rent" — the canonical field; **`MEDRENT_CY` does not exist on this service — never query it**) | yes |
+| | Renter units | `RENTER_CY` | plain |
+| | Owner units | `OWNER_CY` | plain |
+| | Renter share | computed — see §Computations | yes |
+| **Safety** | Crime indices | `get_section_data("crime")` → `CRMCYTOTC/PROC/PERC/MURD/RAPE/ROBB/ASST/BURG/LARC` (Block Group) | n/a (grid) |
 
-- Does not define new data rules.
-- Does not publish ranking tables, briefs, or maps-only views.
-- Does not ask for confirmation before running — VestMap is free and unlimited.
-- Does not render Tapestry-derived values anywhere on the page.
-- Does not mention missing data, failed calls, cross-scale differences, or dropped sections in the rendered output OR the chat response.
-- Does not use market-specific wording. The rendered page is layout-identical across every US market.
+Context callouts (top of page 1): Median HHI · ZIP, Median Home Value · ZIP, Pop Growth · ZIP (all ZIP-scale, from the sources above).
+
+Locality-line names (used verbatim, one `query_gis_field` each):
+- **County** (`{{COUNTY}}`): `query_gis_field(address, …/MapServer/7, ["NAME"])` → e.g. `"Cook County"` (fallback `NAMELSAD`).
+- **MSA** (`{{MSA}}`): `query_gis_field(address, https://services5.arcgis.com/9fQmObndozAJu9f5/arcgis/rest/services/Enriched_USA_Metropolitan_Statistical_Areas/FeatureServer/0, ["NAME"])` → e.g. `"Chicago-Naperville-Elgin, IL-IN-WI"` (fallbacks `NAMELSAD`, `MSA_NAME`). If the address is in no CBSA, drop the MSA segment (and its separator) per the sweep rule.
+
+**`query_gis_field` is all-or-nothing:** one bad/absent field name makes the whole call return "No data found". The field names above are validated. If a batch returns "No data found", re-probe its fields one per call (parallel) and drop only the null ones — never surface the failure.
+
+## Maps — section-matched, embedded as images
+
+Each section's map is the VestMap map **for that section's own layer** — never a different section's map. Get each with a per-section call (a no-`section` call is not guaranteed to return every layer):
+
+| Placement | `map_screenshot(address, …)` | Template slot |
+|---|---|---|
+| Hero banner (top) | `"neighborhood"` | `{{HERO_MAP_URL}}` |
+| Population section | `"expansion"` (5-yr forecasted growth) | `{{POP_MAP_URL}}` |
+| Income section | `"income"` | `{{INCOME_MAP_URL}}` |
+| Housing section | `"hpi"` | `{{HOUSING_MAP_URL}}` |
+| Safety section | `"crime"` | `{{SAFETY_MAP_URL}}` |
+
+`map_screenshot` returns a hosted static image URL (Google Cloud Storage JPG, marker at the property). Embed it directly as `<img src="…">` — it renders in the headless-Chrome PDF, so no download or base64 step is needed.
+
+**Rental has no map yet.** There is no renter/owner (tenure) layer in the `map_screenshot` section enum (`demographics, income, crime, expansion, schools, hpi, neighborhood`). When VestMap adds a tenure/renter map section, wire it onto the Rental section the same way as the others.
+
+**Graceful failure (applies to every map).** If a `map_screenshot` call errors ("No map images could be generated…"), leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` **and** remove the `sec--map` class from that `<section>` so the table reflows full-width. Never substitute a different map; never mention the omission. This is what makes a map **self-heal**: a section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
+
+> **Service status note (crime + expansion).** As of this writing the map service returns no output for `expansion` (so the Population map self-omits everywhere) and renders `crime` as a dark, data-less basemap that it returns as a *success* (so graceful-failure can't catch it — it would embed a broken-looking map). Both are wired above so they restore automatically once the service renders them. For `crime` to self-omit in the meantime, the map service should **return an error while it can't render the crime data layer** (exactly as `expansion` already does) — then this skill suppresses it now and restores it on fix with no change here.
+
+## Computations
+
+- **Delta chips.** A value cell carries a chip comparing it to its **left neighbor**, EXCEPT: the leftmost (Block) cell never has one, and these rows are always **plain** (no chips on any cell): **HHI 2029, HV 2029, Per capita income, Renter units, Owner units**. Every other non-Block cell gets a chip (skip it only if either value is null).
+  - Currency/counts: absolute Δ + relative %, e.g. `−$12.6k · −11%` (abbreviate ≥$10k as `$Xk`, ≥1M as `$X.XM`; large counts as `+5.08M · 148×` using the ratio). For a percentage-point metric whose base is near zero, show just the `pp` delta (a relative % off a ~0 base is noise).
+  - Percentage/rate metrics (growth, unemployment, renter share): `Δ pp · rel%`, e.g. `+1.12pp · +54%`.
+  - Age: `+1.9 yr · +6%`.
+  - Class: `p` (Δ>0), `n` (Δ<0), `z` (|rel|<1% or |Δ|<1pp). Sign only — never a value judgment.
+- **Renter share** = `RENTER_CY / (RENTER_CY + OWNER_CY) × 100` per scale (needs both).
+- **5-yr HV growth** = `((MEDVAL_FY / current-median-home-value)^(1/5) − 1) × 100` per scale, where *current-median-home-value* is the value already shown in the Median home value row (from `get_section_data` at block/tract/zip, `MEDVAL_CY` at `/7` for County). Needs both, both > 0.
+- **Crime is an index, not a count.** The `CRMCY*` values are indexed to the U.S. average (100). Label the section "crime index, 100 = U.S. avg" and keep the note line. Never call them counts; never compute a per-capita rate. **Colour:** give a crime cell the `hi` class (red number) **only when its index exceeds 100**; at or below 100 use a plain `cell`. This keeps below-average crime from rendering alarm-red.
+
+## Template — the self-contained page
+
+Reproduce this exact structure and CSS, substituting the subject's real data. The values shown are an **illustration of the markup only** — replace every one with the subject's VestMap values (or drop it per the sweep rules). The comparison sections (Population, Income, Housing, Rental) all use the identical `table.cmp` markup shown; build each section's `<tbody>` from §Data, honoring the "Chips?" column. Keep the CSS byte-for-byte. Keep the single `brk` page break on the Housing section so the OM lands as two balanced pages (page 1: hero + context + Population + Income; page 2: Housing + Rental + Safety).
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ADDRESS}}</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#6b6b6b; --faint:#9a9a97;
+    --line:#e6e6e2; --surface:#ffffff; --surface-alt:#f7f7f4;
+    --brand:#1e4635; --brand-2:#2c5f4e; --accent:#2c5f4e;
+    --pos-bg:#e7efea; --pos-ink:#1e4d3e;
+    --neg-bg:#f5e6e1; --neg-ink:#7a2d1f;
+    --neu-bg:#eeeeea; --neu-ink:#7a7a76;
+    --sans:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  @page{ size:Letter; margin:0.45in; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--surface); color:var(--ink);
+    font-family:var(--sans); font-size:10.5pt; line-height:1.34;
+    -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums; }
+  .page{ width:100%; }
+  .masthead{
+    margin:-0.45in -0.45in 0.26in -0.45in;
+    background:var(--brand); color:#fff; padding:0.5in 0.45in 0.32in; }
+  .masthead h1{ margin:0; font-size:23pt; font-weight:650; letter-spacing:-0.015em; line-height:1.1; }
+  .masthead .loc{ margin-top:0.07in; font-size:10pt; font-weight:400; color:#cdddd4; letter-spacing:0.01em; }
+  .hero-map{ width:100%; height:1.85in; object-fit:cover; object-position:center;
+    border-radius:7px; border:1px solid var(--line); display:block; }
+  .hero-cap{ font-size:7.6pt; color:var(--faint); text-align:right; margin-top:3px; letter-spacing:0.03em; }
+  .context{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.16in; margin:0.16in 0 0.04in; }
+  .callout{ background:var(--surface-alt); border:1px solid var(--line); border-radius:7px; padding:0.11in 0.14in; }
+  .callout .lbl{ font-size:7.8pt; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .callout .val{ font-size:20pt; font-weight:700; letter-spacing:-0.02em; margin-top:0.03in; line-height:1.05; }
+  .sec{ margin-top:0.17in; break-inside:avoid; page-break-inside:avoid; }
+  .sec.brk{ page-break-before:always; }
+  .sec__head{ display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:2px solid var(--brand); padding:0 2px 4px; margin-bottom:0.08in; }
+  .sec__head h2{ margin:0; font-size:12.5pt; font-weight:650; letter-spacing:-0.01em; color:var(--brand); }
+  .sec__head .scale{ font-size:7.8pt; letter-spacing:0.05em; text-transform:uppercase; color:var(--faint); font-weight:600; }
+  .sec--map .sec__body{ display:grid; grid-template-columns:1fr 2.45in; gap:0.22in; align-items:start; }
+  .sec__data{ min-width:0; }
+  .secmap{ margin:0; }
+  .secmap img{ width:100%; height:1.72in; object-fit:cover; object-position:center;
+    border-radius:6px; border:1px solid var(--line); display:block; }
+  .secmap figcaption{ margin-top:4px; font-size:7.6pt; color:var(--faint); text-align:right; letter-spacing:0.03em; }
+  table.cmp{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  table.cmp col.m{ width:22%; }
+  .cmp th{ font-size:7.8pt; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted);
+    font-weight:600; text-align:right; padding:0 5px 5px; border-bottom:1px solid var(--line); }
+  .cmp th:first-child{ text-align:left; padding-left:2px; }
+  .cmp td{ padding:6px 5px 6px; vertical-align:top; text-align:right; border-bottom:1px solid var(--line); }
+  .cmp tr:last-child td{ border-bottom:none; }
+  .cmp td.m{ text-align:left; padding-left:2px; font-size:8.4pt; font-weight:500; color:var(--muted);
+    text-transform:uppercase; letter-spacing:0.02em; }
+  .v{ font-size:12pt; font-weight:640; letter-spacing:-0.01em; }
+  .chip{ display:inline-block; margin-top:3px; padding:1.5px 5px; border-radius:20px;
+    font-size:7.6pt; font-weight:600; white-space:nowrap; }
+  .chip.p{ background:var(--pos-bg); color:var(--pos-ink); }
+  .chip.n{ background:var(--neg-bg); color:var(--neg-ink); }
+  .chip.z{ background:var(--neu-bg); color:var(--neu-ink); }
+  .crime{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+  .crime .cell{ border:1px solid var(--line); border-radius:6px; padding:7px 9px; background:var(--surface); }
+  .crime .cell .k{ font-size:7.6pt; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:600; }
+  .crime .cell .n{ font-size:14pt; font-weight:700; margin-top:1px; }
+  .crime .cell.hi .n{ color:#a2432f; }
+  .crime .note{ grid-column:1 / -1; font-size:7.8pt; color:var(--faint); margin-top:1px; }
+  .foot{ margin-top:0.28in; padding-top:0.09in; border-top:1px solid var(--line); font-size:7.8pt; color:var(--faint); }
+</style>
+</head>
+<body>
+<section class="page">
+  <div class="masthead">
+    <h1>{{ADDRESS_LINE1}}</h1>
+    <!-- Drop any segment (and its leading " · ") whose value is missing, e.g. no MSA. -->
+    <div class="loc">{{CITY_STATE}} &nbsp;&middot;&nbsp; {{COUNTY}} &nbsp;&middot;&nbsp; ZIP {{ZIP}} &nbsp;&middot;&nbsp; {{MSA}} MSA</div>
+  </div>
+
+  <!-- HERO: neighborhood locator. Drop this <img> AND the .hero-cap if the map call failed. -->
+  <img class="hero-map" src="{{HERO_MAP_URL}}" alt="Neighborhood map" />
+  <div class="hero-cap">Neighborhood &amp; ZIP context</div>
+
+  <div class="context">
+    <div class="callout"><div class="lbl">Median HHI &middot; ZIP</div><div class="val">{{HHI_ZIP}}</div></div>
+    <div class="callout"><div class="lbl">Median Home Value &middot; ZIP</div><div class="val">{{HV_ZIP}}</div></div>
+    <div class="callout"><div class="lbl">Pop Growth &middot; ZIP, 5-yr</div><div class="val">{{POPGR_ZIP}}</div></div>
+  </div>
+
+  <!-- POPULATION (expansion map; self-omits on failure → drop the figure + the sec--map class) -->
+  <section class="sec sec--map">
+    <div class="sec__head"><h2>Population</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
+    <div class="sec__body">
+      <div class="sec__data">
+        <table class="cmp"><colgroup><col class="m"/><col/><col/><col/><col/></colgroup>
+          <thead><tr><th>Metric</th><th>Block</th><th>Tract</th><th>ZIP</th><th>County</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="m">Total population</td>
+              <td><div class="v">4,443</div></td>
+              <td><div class="v">10,961</div><span class="chip p">+6,518 · 2.5×</span></td>
+              <td><div class="v">34,511</div><span class="chip p">+23,550 · 3.1×</span></td>
+              <td><div class="v">5,113,353</div><span class="chip p">+5.08M · 148×</span></td>
+            </tr>
+            <!-- …Median age, Avg HH size, 5-yr pop growth rows follow the same pattern (all chipped)… -->
+          </tbody>
+        </table>
+      </div>
+      <figure class="secmap">
+        <img src="{{POP_MAP_URL}}" alt="Population growth map" />
+        <figcaption>5-yr forecasted population growth by block group</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- INCOME (income map) -->
+  <section class="sec sec--map">
+    <div class="sec__head"><h2>Income</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
+    <div class="sec__body">
+      <div class="sec__data">
+        <table class="cmp"><colgroup><col class="m"/><col/><col/><col/><col/></colgroup>
+          <thead><tr><th>Metric</th><th>Block</th><th>Tract</th><th>ZIP</th><th>County</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="m">Median HHI</td>
+              <td><div class="v">$123,992</div></td>
+              <td><div class="v">$119,267</div><span class="chip n">−$4.7k · −4%</span></td>
+              <td><div class="v">$119,949</div><span class="chip z">+$682 · +1%</span></td>
+              <td><div class="v">$81,445</div><span class="chip n">−$38.5k · −32%</span></td>
+            </tr>
+            <!-- HHI 2029 (plain), 5-yr HHI growth (chips), Per capita income (plain), Unemployment (chips) rows follow -->
+          </tbody>
+        </table>
+      </div>
+      <figure class="secmap">
+        <img src="{{INCOME_MAP_URL}}" alt="Income map" />
+        <figcaption>Median household income by block group</figcaption>
+      </figure>
+    </div>
+  </section>
+</section>
+
+<section class="page">
+  <!-- HOUSING (hpi map) — 'brk' forces the page break here -->
+  <section class="sec sec--map brk">
+    <div class="sec__head"><h2>Housing Values</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
+    <div class="sec__body">
+      <div class="sec__data">
+        <table class="cmp"><colgroup><col class="m"/><col/><col/><col/><col/></colgroup>
+          <thead><tr><th>Metric</th><th>Block</th><th>Tract</th><th>ZIP</th><th>County</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="m">Median home value</td>
+              <td><div class="v">$545,752</div></td>
+              <td><div class="v">$517,572</div><span class="chip n">−$28.2k · −5%</span></td>
+              <td><div class="v">$460,318</div><span class="chip n">−$57.3k · −11%</span></td>
+              <td><div class="v">$325,501</div><span class="chip n">−$134.8k · −29%</span></td>
+            </tr>
+            <!-- HV 2029 (plain), 5-yr HV growth (chips) rows follow -->
+          </tbody>
+        </table>
+      </div>
+      <figure class="secmap">
+        <img src="{{HOUSING_MAP_URL}}" alt="Home price map" />
+        <figcaption>Home price index by block group</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- RENTAL (no map yet — see §Maps: no tenure layer in the map service) -->
+  <section class="sec">
+    <div class="sec__head"><h2>Rental Market</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
+    <div class="sec__body"><div class="sec__data">
+      <table class="cmp"><colgroup><col class="m"/><col/><col/><col/><col/></colgroup>
+        <thead><tr><th>Metric</th><th>Block</th><th>Tract</th><th>ZIP</th><th>County</th></tr></thead>
+        <tbody>
+          <!-- Median rent (chips), Renter units (plain), Owner units (plain), Renter share (chips) -->
+        </tbody>
+      </table>
+    </div></div>
+  </section>
+
+  <!-- SAFETY (crime map; self-omits on failure). Give a cell 'hi' only when its index > 100. -->
+  <section class="sec sec--map">
+    <div class="sec__head"><h2>Safety</h2><span class="scale">Block Group &middot; crime index, 100 = U.S. avg</span></div>
+    <div class="sec__body">
+      <div class="sec__data">
+        <div class="crime">
+          <div class="cell hi"><div class="k">Total</div><div class="n">165</div></div>
+          <div class="cell hi"><div class="k">Property</div><div class="n">177</div></div>
+          <div class="cell hi"><div class="k">Personal</div><div class="n">101</div></div>
+          <div class="cell"><div class="k">Murder</div><div class="n">50</div></div>
+          <div class="cell"><div class="k">Rape</div><div class="n">79</div></div>
+          <div class="cell hi"><div class="k">Robbery</div><div class="n">254</div></div>
+          <div class="cell"><div class="k">Assault</div><div class="n">58</div></div>
+          <div class="cell"><div class="k">Burglary</div><div class="n">48</div></div>
+          <div class="cell hi"><div class="k">Larceny</div><div class="n">211</div></div>
+          <div class="note">Indexed to the U.S. average (100). A value of 200 is twice the national rate.</div>
+        </div>
+      </div>
+      <figure class="secmap">
+        <img src="{{SAFETY_MAP_URL}}" alt="Crime map" />
+        <figcaption>Crime index by block group</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div class="foot">Data: VestMap &middot; Generated {{DATE}}</div>
+</section>
+</body>
+</html>
+```
+
+## PDF export
+
+Write the filled HTML to `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.html`, then (macOS; Chrome 150 won't self-exit, so the `perl` alarm stops it once the PDF is written — a non-empty PDF is success regardless of exit code):
+
+```bash
+perl -e 'alarm shift @ARGV; exec @ARGV' 40 \
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --no-pdf-header-footer \
+  --virtual-time-budget=20000 \
+  --user-data-dir="$(mktemp -d)" \
+  --print-to-pdf="vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf" \
+  "file:///ABSOLUTE/PATH/vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.html"
+```
+
+`--virtual-time-budget=20000` gives the hosted map images time to fetch. Then delete the intermediate `.html`. If `/Applications/Google Chrome.app/...` is missing, output the HTML instead and tell the user once that the PDF needs Chrome (File → Print → Save as PDF preserves the maps).
+
+## Respond
+
+Print the PDF path and one sentence naming the address. Do not list sections, do not mention any missing data or dropped map, do not describe the layout.
+
+## Opt-in modules (only when the user names them)
+
+Rendered only on explicit request; otherwise absent. Same rules (VestMap-sourced, omit-on-null, no failure notes). Add each as an extra `.sec` (heavy modules on their own page via `brk`).
+
+| Trigger | Module | Source |
+|---|---|---|
+| "workforce", "occupations" | Occupation mix / collar shares | the 13 `OCC*_CY` fields at each scale |
+| "include risk", "FEMA", "hazards" | Natural-hazard risk (Tract) | `search_real_estate_data("National Risk Index")` → `RISK_SCORE`, `RISK_RATNG`, `SOVI_SCORE`, `RESL_SCORE`, top hazards by `_RISKS` |
+| "include schools" | Nearest schools + district | `get_section_data(address, "schools")`; pair with `map_screenshot(address, "schools")` |
+| "education", "degree attainment" | 5-bucket education by scale | `NOHS_CY`, `HSGRAD_CY`, `SMCOLL_CY`, `BACHDEG_CY`, `GRADDEG_CY` |
+| "income distribution", "HINC buckets" | 9-bucket income distribution | `HINC0_CY`…`HINC200_CY`, `TOTHH_CY` |
+| "businesses", "MSA data" | Business counts (CBSA) | `N01_BUS`, `N01_EMP` on the CBSA layer |
+| "HPI" (as data, not the map) | House Price Index | `get_section_data(address, "hpi")` |
