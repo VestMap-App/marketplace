@@ -28,7 +28,8 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. A
    - `get_section_data(address, "crime")` → the `CRMCY*` crime **indices** at Block Group.
    - `query_gis_field` batches (≤3 fields each) at the four demographics layers — see §Data.
    - `query_gis_field(address, <County layer /7>, ["NAME"])` → the **county name** (→ `{{COUNTY}}`); and `query_gis_field(address, <CBSA layer>, ["NAME"])` → the **MSA name** (→ `{{MSA}}`). See §Data.
-   - **Section maps** — one `map_screenshot(address, section)` call per placed map: `neighborhood` (hero), `income` (Income), `hpi` (Housing), `expansion` (Population), `crime` (Safety). See §Maps.
+   - **Hero aerial coords** — geocode the property for the aerial hero map: WebFetch the US Census geocoder `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=<url-encoded address>&benchmark=Public_AR_Current&format=json` → read `result.addressMatches[0].coordinates` (`x`=lng, `y`=lat). If it returns no match, the hero is dropped (graceful).
+   - **Section maps** — one `map_screenshot(address, section)` call per placed map: `income` (Income), `hpi` (Housing), `expansion` (Population), `crime` (Safety). See §Maps.
 3. **Compute** the delta chips and the two derived metrics (renter share, HV growth) — see §Computations. Precondition-gate every computation: if a component is null, skip it.
 4. **Sweep** for empties (drop empty cells → thin rows → thin sections; drop empty masthead segments) per the hard rules.
 5. **Fill the template** in §Template with the subject's values and the map URLs.
@@ -74,19 +75,23 @@ Locality-line names (used verbatim, one `query_gis_field` each):
 
 **`query_gis_field` is all-or-nothing:** one bad/absent field name makes the whole call return "No data found". The field names above are validated. If a batch returns "No data found", re-probe its fields one per call (parallel) and drop only the null ones — never surface the failure.
 
-## Maps — section-matched, embedded as images
+## Maps — hero aerial + section-matched data maps
 
-Each section's map is the VestMap map **for that section's own layer** — never a different section's map. Get each with a per-section call (a no-`section` call is not guaranteed to return every layer):
+**Hero = a clean aerial base map**, NOT a `map_screenshot` layer. `map_screenshot` sections all carry a data layer (and `neighborhood` is cluttered with meaningless point dots), so the hero is a plain aerial with only the property marker — it renders in the PDF via Leaflet + ESRI World Imagery tiles at the geocoded lat/lng (see the `#hero` script in the template). This just shows where the property is. If geocoding failed (no lat/lng), drop the `#hero` div and its caption.
 
-| Placement | `map_screenshot(address, …)` | Template slot |
+Each **section** map is the VestMap `map_screenshot` for that section's own layer — never a different section's map. Get each with a per-section call (a no-`section` call is not guaranteed to return every layer):
+
+| Placement | Source | Template slot |
 |---|---|---|
-| Hero banner (top) | `"neighborhood"` | `{{HERO_MAP_URL}}` |
-| Population section | `"expansion"` (5-yr forecasted growth) | `{{POP_MAP_URL}}` |
-| Income section | `"income"` | `{{INCOME_MAP_URL}}` |
-| Housing section | `"hpi"` | `{{HOUSING_MAP_URL}}` |
-| Safety section | `"crime"` | `{{SAFETY_MAP_URL}}` |
+| Hero banner (top) | aerial (Leaflet + ESRI `World_Imagery`, marker only) | `{{LAT}}` / `{{LNG}}` |
+| Population section | `map_screenshot("expansion")` (5-yr forecasted growth) | `{{POP_MAP_URL}}` |
+| Income section | `map_screenshot("income")` | `{{INCOME_MAP_URL}}` |
+| Housing section | `map_screenshot("hpi")` | `{{HOUSING_MAP_URL}}` |
+| Safety section | `map_screenshot("crime")` | `{{SAFETY_MAP_URL}}` |
 
 `map_screenshot` returns a hosted static image URL (Google Cloud Storage JPG, marker at the property). Embed it directly as `<img src="…">` — it renders in the headless-Chrome PDF, so no download or base64 step is needed.
+
+**Legends.** The choropleth maps (`income`, `hpi`) don't ship a legend in the image, so the template adds a directional `.legend` bar (red→green = Lower→Higher) beneath each. Keep it on `income` and `hpi`. (`expansion`/`crime` legends can be added when those maps render.)
 
 **Rental has no map yet.** There is no renter/owner (tenure) layer in the `map_screenshot` section enum (`demographics, income, crime, expansion, schools, hpi, neighborhood`). When VestMap adds a tenure/renter map section, wire it onto the Rental section the same way as the others.
 
@@ -116,6 +121,8 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{{ADDRESS}}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --ink:#1a1a1a; --muted:#6b6b6b; --faint:#9a9a97;
@@ -137,8 +144,9 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     background:var(--brand); color:#fff; padding:0.5in 0.45in 0.32in; }
   .masthead h1{ margin:0; font-size:23pt; font-weight:650; letter-spacing:-0.015em; line-height:1.1; }
   .masthead .loc{ margin-top:0.07in; font-size:10pt; font-weight:400; color:#cdddd4; letter-spacing:0.01em; }
-  .hero-map{ width:100%; height:1.85in; object-fit:cover; object-position:center;
-    border-radius:7px; border:1px solid var(--line); display:block; }
+  .hero-map{ width:100%; height:1.95in; border-radius:7px; border:1px solid var(--line);
+    overflow:hidden; background:var(--surface-alt); }
+  .leaflet-container{ background:var(--surface-alt); }
   .hero-cap{ font-size:7.6pt; color:var(--faint); text-align:right; margin-top:3px; letter-spacing:0.03em; }
   .context{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.16in; margin:0.16in 0 0.04in; }
   .callout{ background:var(--surface-alt); border:1px solid var(--line); border-radius:7px; padding:0.11in 0.14in; }
@@ -155,7 +163,11 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
   .secmap{ margin:0; }
   .secmap img{ width:100%; height:1.72in; object-fit:cover; object-position:center;
     border-radius:6px; border:1px solid var(--line); display:block; }
-  .secmap figcaption{ margin-top:4px; font-size:7.6pt; color:var(--faint); text-align:right; letter-spacing:0.03em; }
+  .secmap figcaption{ margin-top:3px; font-size:7.6pt; color:var(--faint); text-align:right; letter-spacing:0.03em; }
+  .legend{ display:flex; align-items:center; gap:6px; margin-top:5px; justify-content:flex-end; }
+  .legend .lbl{ font-size:7pt; color:var(--muted); font-weight:500; }
+  .legend .bar{ height:7px; width:1.35in; border-radius:3px; border:1px solid var(--line);
+    background:linear-gradient(90deg,#c0392b 0%,#e67e22 28%,#f4d03f 52%,#a9d18e 76%,#27803f 100%); }
   table.cmp{ width:100%; border-collapse:collapse; table-layout:fixed; }
   table.cmp col.m{ width:22%; }
   .cmp th{ font-size:7.8pt; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted);
@@ -188,9 +200,9 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     <div class="loc">{{CITY_STATE}} &nbsp;&middot;&nbsp; {{COUNTY}} &nbsp;&middot;&nbsp; ZIP {{ZIP}} &nbsp;&middot;&nbsp; {{MSA}} MSA</div>
   </div>
 
-  <!-- HERO: neighborhood locator. Drop this <img> AND the .hero-cap if the map call failed. -->
-  <img class="hero-map" src="{{HERO_MAP_URL}}" alt="Neighborhood map" />
-  <div class="hero-cap">Neighborhood &amp; ZIP context</div>
+  <!-- HERO: clean aerial base map (Leaflet + ESRI World Imagery, marker only). Drop #hero + caption if geocoding failed. -->
+  <div class="hero-map" id="hero"></div>
+  <div class="hero-cap">Aerial view &middot; property location</div>
 
   <div class="context">
     <div class="callout"><div class="lbl">Median HHI &middot; ZIP</div><div class="val">{{HHI_ZIP}}</div></div>
@@ -245,6 +257,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
       </div>
       <figure class="secmap">
         <img src="{{INCOME_MAP_URL}}" alt="Income map" />
+        <div class="legend"><span class="lbl">Lower</span><span class="bar"></span><span class="lbl">Higher</span></div>
         <figcaption>Median household income by block group</figcaption>
       </figure>
     </div>
@@ -273,6 +286,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
       </div>
       <figure class="secmap">
         <img src="{{HOUSING_MAP_URL}}" alt="Home price map" />
+        <div class="legend"><span class="lbl">Lower</span><span class="bar"></span><span class="lbl">Higher</span></div>
         <figcaption>Home price index by block group</figcaption>
       </figure>
     </div>
@@ -318,6 +332,24 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
 
   <div class="foot">Data: VestMap &middot; Generated {{DATE}}</div>
 </section>
+
+<script>
+  // Hero aerial base map: ESRI World Imagery at the geocoded property, marker only.
+  window.addEventListener('load', function(){
+    var lat = parseFloat('{{LAT}}'), lng = parseFloat('{{LNG}}');
+    var el = document.getElementById('hero');
+    if (!el || isNaN(lat) || isNaN(lng)) {
+      if (el) { var cap = el.nextElementSibling;
+        if (cap && cap.className.indexOf('hero-cap') > -1) cap.parentNode.removeChild(cap);
+        el.parentNode.removeChild(el); }
+      return;
+    }
+    var map = L.map('hero', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, keyboard:false });
+    map.setView([lat, lng], 16);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 }).addTo(map);
+    L.marker([lat, lng]).addTo(map);
+  });
+</script>
 </body>
 </html>
 ```
@@ -330,13 +362,13 @@ Write the filled HTML to `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.html`, then (macOS;
 perl -e 'alarm shift @ARGV; exec @ARGV' 40 \
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --headless --disable-gpu --no-pdf-header-footer \
-  --virtual-time-budget=20000 \
+  --virtual-time-budget=28000 \
   --user-data-dir="$(mktemp -d)" \
   --print-to-pdf="vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf" \
   "file:///ABSOLUTE/PATH/vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.html"
 ```
 
-`--virtual-time-budget=20000` gives the hosted map images time to fetch. Then delete the intermediate `.html`. If `/Applications/Google Chrome.app/...` is missing, output the HTML instead and tell the user once that the PDF needs Chrome (File → Print → Save as PDF preserves the maps).
+`--virtual-time-budget=28000` gives the aerial hero tiles (Leaflet + ESRI) and the hosted section-map images time to fetch. Then delete the intermediate `.html`. If `/Applications/Google Chrome.app/...` is missing, output the HTML instead and tell the user once that the PDF needs Chrome (File → Print → Save as PDF preserves the maps).
 
 ## Respond
 
