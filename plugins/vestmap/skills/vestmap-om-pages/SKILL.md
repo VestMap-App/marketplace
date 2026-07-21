@@ -133,15 +133,15 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     --neu-bg:#eeeeea; --neu-ink:#7a7a76;
     --sans:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
-  @page{ size:Letter; margin:0.45in; }
+  @page{ size:Letter; margin:0; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; background:var(--surface); color:var(--ink);
     font-family:var(--sans); font-size:10.5pt; line-height:1.34;
     -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums; }
-  .page{ width:100%; }
+  .page{ width:8.5in; }              /* full paper width; @page margin is 0 so the masthead can bleed to the edges */
+  .wrap{ padding:0.22in 0.55in 0.5in; } /* body content sits inside consistent margins */
   .masthead{
-    margin:-0.45in -0.45in 0.26in -0.45in;
-    background:var(--brand); color:#fff; padding:0.5in 0.45in 0.32in; }
+    background:var(--brand); color:#fff; padding:0.5in 0.55in 0.34in; } /* full-bleed header (top/left/right) */
   .masthead h1{ margin:0; font-size:23pt; font-weight:650; letter-spacing:-0.015em; line-height:1.1; }
   .masthead .loc{ margin-top:0.07in; font-size:10pt; font-weight:400; color:#cdddd4; letter-spacing:0.01em; }
   .hero-map{ width:100%; height:1.95in; border-radius:7px; border:1px solid var(--line);
@@ -153,7 +153,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
   .callout .lbl{ font-size:7.8pt; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
   .callout .val{ font-size:20pt; font-weight:700; letter-spacing:-0.02em; margin-top:0.03in; line-height:1.05; }
   .sec{ margin-top:0.17in; break-inside:avoid; page-break-inside:avoid; }
-  .sec.brk{ page-break-before:always; }
+  .sec.brk{ page-break-before:always; padding-top:0.5in; } /* top margin for the new page (since @page margin is 0) */
   .sec__head{ display:flex; align-items:baseline; justify-content:space-between;
     border-bottom:2px solid var(--brand); padding:0 2px 4px; margin-bottom:0.08in; }
   .sec__head h2{ margin:0; font-size:12.5pt; font-weight:650; letter-spacing:-0.01em; color:var(--brand); }
@@ -199,6 +199,8 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     <!-- Drop any segment (and its leading " · ") whose value is missing, e.g. no MSA. -->
     <div class="loc">{{CITY_STATE}} &nbsp;&middot;&nbsp; {{COUNTY}} &nbsp;&middot;&nbsp; ZIP {{ZIP}} &nbsp;&middot;&nbsp; {{MSA}} MSA</div>
   </div>
+
+  <div class="wrap">
 
   <!-- HERO: clean aerial base map (Leaflet + ESRI World Imagery, marker only). Drop #hero + caption if geocoding failed. -->
   <div class="hero-map" id="hero"></div>
@@ -262,9 +264,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
       </figure>
     </div>
   </section>
-</section>
 
-<section class="page">
   <!-- HOUSING (hpi map) — 'brk' forces the page break here -->
   <section class="sec sec--map brk">
     <div class="sec__head"><h2>Housing Values</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
@@ -331,6 +331,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
   </section>
 
   <div class="foot">Data: VestMap &middot; Generated {{DATE}}</div>
+  </div><!-- .wrap -->
 </section>
 
 <script>
