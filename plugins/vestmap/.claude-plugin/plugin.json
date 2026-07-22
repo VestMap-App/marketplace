@@ -1,6 +1,6 @@
 {
   "name": "vestmap",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "VestMap property data and Offering Memorandum tools. Includes the 'vestmap' skill (US property & demographics Q&A via the VestMap MCP server) and the 'vestmap-om-pages' skill (renders Offering Memorandum PDF/HTML pages, building on the base skill).",
   "author": {
     "name": "VestMap"
