@@ -130,6 +130,15 @@ Both restore automatically the day `custom_map_screenshot` can classify on the v
 (or accepts explicit break values); the tenure map additionally needs a normalization field to
 show *share* rather than raw households. Nothing else in this file changes when they land.
 
+### Transient errors are NOT failures — retry once before omitting
+
+Distinguish two kinds of error, because they need opposite responses:
+
+- **Transport / gateway error** — the result is not valid JSON at all: `Unexpected token '<', "<html> …"`, a timeout, a 502/503, or any HTML error page. The map service was briefly unavailable. **Retry the call once.** These are common enough that a single blip would otherwise silently strip every map off the page — a whole OM's worth of maps can vanish from one bad moment. Only omit if the retry also fails.
+- **Data error** — a well-formed error naming the field, layer, or address ("No data found", "field does not exist", "Service … not started"). Retrying will not help. Omit immediately per §Graceful failure.
+
+Never diagnose a transport error as a registry problem. If a retry succeeds with identical arguments, the arguments were never at fault. In particular, a `Service USA_Demographics_and_Boundaries_2022/MapServer not started` error can only come from a call that passed a **2022** layer — the registry above is entirely 2024, and `data_query` (which resolves layers by free text and can land on the dead 2022 service) is forbidden for section maps. If you see a 2022 error while running the registry, something has substituted a different call; re-read this file rather than editing the registry.
+
 ### Graceful failure (applies to every map)
 
 If a `custom_map_screenshot` call errors, leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` and the now-unused `sec--map` class from that `<section>`. (The table is full-width either way — `sec--map` no longer changes the table's geometry, it only marks the section as carrying a map. Dropping it is tidiness, not a reflow.) Never substitute a different map; never mention the omission. A section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
