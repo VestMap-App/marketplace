@@ -18,6 +18,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. A
 - **No prose claims beyond the numbers.** No "desirable", "up-and-coming", "affluent", "safe". Labels and numbers only.
 - **Market-agnostic.** The page reads identically for any US market. A market name appears only in the address, the locality line, and (data-driven) the MSA. Nothing city-specific is hardcoded.
 - **No "Offering Memorandum" eyebrow.** The masthead is just the address.
+- **The comparison table always gets the full 7.4in column — never put a map beside it.** Seven-digit values are routine in high-cost metros (Santa Clara, SF, NYC), and the geometry is unforgiving. Full width: 7.4in − 1.63in metric column = 1.44in per value cell, and `$1,538,982` at 12pt needs ~0.95in — 34% headroom. With a 2.45in map beside it: 4.73in − 1.04in = **0.92in** per cell, and the same value **overlaps its neighbour** (real failure: `$1,107,164$1,538,982`). `table-layout:fixed` gives a number no break opportunity, so it silently runs into the next column rather than wrapping or clipping. Never reintroduce a side-by-side map to buy vertical space.
 
 ## Workflow
 
@@ -131,7 +132,7 @@ show *share* rather than raw households. Nothing else in this file changes when 
 
 ### Graceful failure (applies to every map)
 
-If a `custom_map_screenshot` call errors, leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` **and** remove the `sec--map` class from that `<section>`. Never substitute a different map; never mention the omission. A section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
+If a `custom_map_screenshot` call errors, leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` and the now-unused `sec--map` class from that `<section>`. (The table is full-width either way — `sec--map` no longer changes the table's geometry, it only marks the section as carrying a map. Dropping it is tidiness, not a reflow.) Never substitute a different map; never mention the omission. A section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
 
 ### Custom maps on request
 
