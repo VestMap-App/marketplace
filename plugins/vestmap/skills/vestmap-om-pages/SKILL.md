@@ -1,6 +1,6 @@
 ---
 name: vestmap-om-pages
-description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). Shows Population, Income, Housing, and Rental at Block / Tract / ZIP / County scale with explicit cross-scale deltas, plus a Safety block (Block-Group crime index) and section-matched VestMap data maps. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, and PDF steps; it needs no other file. Optional modules (Workforce, Risk, Schools, Education, Income distribution, Businesses, HPI) render only when the user names them.
+description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). Shows Population, Income, Housing, and Rental at Block / Tract / ZIP / County scale with explicit cross-scale deltas, plus a Safety block (Block-Group crime index) and a section-matched VestMap data map on every mappable section — Income, Housing, Rental and Safety each carry their own block-group choropleth with a real legend, built with `custom_map_screenshot`. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, and PDF steps; it needs no other file. Optional modules (Workforce, Risk, Schools, Education, Income distribution, Businesses, HPI) render only when the user names them.
 user-invocable: true
 ---
 
@@ -11,7 +11,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. A
 ## Hard rules
 
 - **PDF is the default output.** Write the HTML to a temp file, convert to PDF with headless Chrome (see §PDF), print the PDF path. Only output HTML instead if the user says "HTML" / "html only".
-- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `map_screenshot`, `search_real_estate_data`). If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
+- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `custom_map_screenshot`, `search_real_estate_data`). If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
 - **Missing data disappears — it is never announced.** If a value is null/blank, drop that cell. If a row has fewer than 2 non-null value cells, drop the row. If a section has fewer than 2 rows, drop the section. For a masthead locality segment with no value (e.g. no MSA), drop that segment **and its trailing `· ` separator** so no empty `· ·` remains. The page never contains "N/A", "—", "data unavailable", tool names, field names, or any note about what was dropped. It just gets smaller. The chat reply after generation is equally quiet (see §Respond).
 - **Different scales differ — that is normal, never a problem.** Block / Tract / ZIP / County cover different areas, so their values differ. Report them as-is. Do not verify, cross-check, reconcile, or describe any cross-scale difference as a divergence/anomaly.
 - **No Tapestry, ever.** Never call `get_section_data("demographics")` for numbers and never put a Tapestry segment/grade/lifestyle label on the page.
@@ -29,7 +29,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. A
    - `query_gis_field` batches (≤3 fields each) at the four demographics layers — see §Data.
    - `query_gis_field(address, <County layer /7>, ["NAME"])` → the **county name** (→ `{{COUNTY}}`); and `query_gis_field(address, <CBSA layer>, ["NAME"])` → the **MSA name** (→ `{{MSA}}`). See §Data.
    - **Hero aerial coords** — geocode the property for the aerial hero map: WebFetch the US Census geocoder `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=<url-encoded address>&benchmark=Public_AR_Current&format=json` → read `result.addressMatches[0].coordinates` (`x`=lng, `y`=lat). If it returns no match, the hero is dropped (graceful).
-   - **Section maps** — one `map_screenshot(address, section)` call per placed map: `income` (Income), `hpi` (Housing), `expansion` (Population), `crime` (Safety). See §Maps.
+   - **Section maps** — one `custom_map_screenshot` call per placed map (Income, Housing, Rental, Safety), each with the exact `service_url` / `field_name` / `colors` / `classification_method` from the registry in §Maps. Population has no map — see §Maps.
 3. **Compute** the delta chips and the two derived metrics (renter share, HV growth) — see §Computations. Precondition-gate every computation: if a component is null, skip it.
 4. **Sweep** for empties (drop empty cells → thin rows → thin sections; drop empty masthead segments) per the hard rules.
 5. **Fill the template** in §Template with the subject's values and the map URLs.
@@ -75,29 +75,63 @@ Locality-line names (used verbatim, one `query_gis_field` each):
 
 **`query_gis_field` is all-or-nothing:** one bad/absent field name makes the whole call return "No data found". The field names above are validated. If a batch returns "No data found", re-probe its fields one per call (parallel) and drop only the null ones — never surface the failure.
 
-## Maps — hero aerial + section-matched data maps
+## Maps — hero aerial + section-matched custom maps
 
-**Hero = a clean aerial base map**, NOT a `map_screenshot` layer. `map_screenshot` sections all carry a data layer (and `neighborhood` is cluttered with meaningless point dots), so the hero is a plain aerial with only the property marker — it renders in the PDF via Leaflet + ESRI World Imagery tiles at the geocoded lat/lng (see the `#hero` script in the template). This just shows where the property is. If geocoding failed (no lat/lng), drop the `#hero` div and its caption.
+Every mappable section carries its own map, built with **`custom_map_screenshot`** — the arbitrary-field renderer — not `map_screenshot`. `custom_map_screenshot` is what makes a per-section map possible at all: it symbolizes *any* field on *any* layer, so sections that the fixed 7-section `map_screenshot` enum never covered (Rental) get a map, and sections whose fixed map is broken (Safety) get a working one. It also **bakes a real legend with the actual class breaks into the image**, which `map_screenshot` does not.
 
-Each **section** map is the VestMap `map_screenshot` for that section's own layer — never a different section's map. Get each with a per-section call (a no-`section` call is not guaranteed to return every layer):
+**Hero = a clean aerial base map**, NOT a data layer. No map tool renders a plain property-centered aerial, so the hero stays a Leaflet + ESRI World Imagery render at the geocoded lat/lng (see the `#hero` script in the template). If geocoding failed (no lat/lng), drop the `#hero` div and its caption.
 
-| Placement | Source | Template slot |
-|---|---|---|
-| Hero banner (top) | aerial (Leaflet + ESRI `World_Imagery`, marker only) | `{{LAT}}` / `{{LNG}}` |
-| Population section | `map_screenshot("expansion")` (5-yr forecasted growth) | `{{POP_MAP_URL}}` |
-| Income section | `map_screenshot("income")` | `{{INCOME_MAP_URL}}` |
-| Housing section | `map_screenshot("hpi")` | `{{HOUSING_MAP_URL}}` |
-| Safety section | `map_screenshot("crime")` | `{{SAFETY_MAP_URL}}` |
+### The section-map registry
 
-`map_screenshot` returns a hosted static image URL (Google Cloud Storage JPG, marker at the property). Embed it directly as `<img src="…">` — it renders in the headless-Chrome PDF, so no download or base64 step is needed.
+Fire all of these in parallel, in the same batch as the data calls. Pass every argument shown — none are optional in practice (see §Map rules for why).
 
-**Legends.** The choropleth maps (`income`, `hpi`) don't ship a legend in the image, so the template adds a directional `.legend` bar (red→green = Lower→Higher) beneath each. Keep it on `income` and `hpi`. (`expansion`/`crime` legends can be added when those maps render.)
+| Section | `service_url` | `field_name` | `field_alias` / `legend_title` | `colors` | Template slot |
+|---|---|---|---|---|---|
+| Population | *(omit — see below)* | | | | `{{POP_MAP_URL}}` |
+| Income | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDHINC_CY` | `2024 Median Household Income` / `Median household income` | `["#f7fcf5","#c7e9c0","#74c476","#31a354","#006d2c"]` | `{{INCOME_MAP_URL}}` |
+| Housing Values | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDVAL_CY` | `2024 Median Home Value` / `Median home value` | `["#f7f4f9","#d4b9da","#c994c7","#df65b0","#980043"]` | `{{HOUSING_MAP_URL}}` |
+| Rental Market | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDCRNT_CY` | `2024 Median Contract Rent` / `Median contract rent` | `["#edf8fb","#b2e2e2","#66c2a4","#2ca25f","#006d2c"]` | `{{RENTAL_MAP_URL}}` |
+| Safety | `https://demographics5.arcgis.com/arcgis/rest/services/USA_Crime_2024/MapServer/12` | `CRMCYTOTC` | `2024 Total Crime Index` / `Crime index · 100 = U.S. avg` | `["#fee5d9","#fcae91","#fb6a4a","#de2d26","#a50f15"]` | `{{SAFETY_MAP_URL}}` |
 
-**Rental has no map yet.** There is no renter/owner (tenure) layer in the `map_screenshot` section enum (`demographics, income, crime, expansion, schools, hpi, neighborhood`). When VestMap adds a tenure/renter map section, wire it onto the Rental section the same way as the others.
+`…/USA_Demographics_and_Boundaries_2024/MapServer/12` is the **Block Group** layer — the same `/12` used for the Block column of every table, so each map is drawn at the finest scale the page reports. Full prefix: `https://demographics5.arcgis.com/arcgis/rest/services/`.
 
-**Graceful failure (applies to every map).** If a `map_screenshot` call errors ("No map images could be generated…"), leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` **and** remove the `sec--map` class from that `<section>` so the table reflows full-width. Never substitute a different map; never mention the omission. This is what makes a map **self-heal**: a section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
+Every call also passes:
 
-> **Service status note (crime + expansion).** As of this writing the map service returns no output for `expansion` (so the Population map self-omits everywhere) and renders `crime` as a dark, data-less basemap that it returns as a *success* (so graceful-failure can't catch it — it would embed a broken-looking map). Both are wired above so they restore automatically once the service renders them. For `crime` to self-omit in the meantime, the map service should **return an error while it can't render the crime data layer** (exactly as `expansion` already does) — then this skill suppresses it now and restores it on fix with no change here.
+```
+classification_method: "equal-interval"
+class_breaks_count:    5
+address:               <the subject address>
+```
+
+### Map rules
+
+- **`classification_method` MUST be `"equal-interval"`.** `"quantile"` is unusable: its sample is polluted by null/zero features, so breaks collapse (a real Denver run produced breaks of `0 · 0 · 7,969 · 12,832 · 200,001` — the whole metro rendered as one flat colour). Equal-interval produces usable, readable breaks on every field in the registry.
+- **Always pass `colors` explicitly**, matched to the meaning of the data: red ramps for risk/crime only, green/teal for income and rent, purple for home value, blue for population. The server applies no colour heuristics — an unspecified ramp is not guaranteed to suit the field.
+- **Always pass `legend_title`** — it is the text printed on the baked-in legend, so it must read as a finished caption, never as a debug label. Never leave the classification method or field name in it.
+- **Breaks are national, not local.** The same field returns identical class breaks in every market (verified: Denver and Minneapolis both returned `449.6 / 896.2 / 1,343 / 1,789 / 2,236` for `CRMCYTOTC`). This is a feature for an OM — an index value means the same thing in every market, so pages are comparable — but it does mute local contrast, and it is what breaks the Population map (below).
+- **Do not use `data_query` for section maps.** Free-text resolution picks whatever layer it matches, often a coarser geography (ZIP or County) than the page's Block Group. Use it only for the ad-hoc maps in §Custom maps on request.
+- **`map_id` is unnecessary.** Every registry entry renders correctly on the plain-basemap fallback. Passing a webmap ID changes only the basemap underneath, never the data layer.
+- **The image is 1120×560 (2:1) with the legend in the TOP-RIGHT corner.** The slot must preserve that: never crop from the top, or the legend is the first thing lost, and never crop below 50% of the source height, or the property marker (dead centre) is lost. See the `.secmap` CSS.
+
+### Population has no map (yet)
+
+`POPGRWCYFY` renders a **blank** map: one national outlier (a block group at +252.73%/yr) stretches the equal-interval breaks so far that every block group in any real market lands in the bottom class. `TOTPOP_CY` fails the same way. Both return *success* with a valid image, so graceful-failure cannot catch it — the map must be **omitted deliberately**: leave `{{POP_MAP_URL}}` empty and drop the Population `<figure>`. The section renders as a full-width table, which is correct and complete.
+
+This restores automatically the day `custom_map_screenshot` can classify on the visible extent (or accepts explicit break values) — at that point wire Population in as `POPGRWCYFY` at `/12` with a blue ramp and nothing else here changes.
+
+### Graceful failure (applies to every map)
+
+If a `custom_map_screenshot` call errors, leave that slot empty: for the hero, drop the whole `<img class="hero-map">` + its caption; for a section map, drop its whole `<figure class="secmap">` **and** remove the `sec--map` class from that `<section>`. Never substitute a different map; never mention the omission. A section that can't render its map today simply shows its table, and the map reappears automatically the day the service renders it — no edit to this file.
+
+### Custom maps on request
+
+If the user names a data layer that is not in the registry ("add a flood risk map", "show me owner-occupancy", "map the unemployment rate"), add it as an extra map — this is the same tool, pointed at a different field:
+
+1. `search_real_estate_data("<what they asked for>")` → pick the result whose `layerTitle` is **Block Group** (or the finest available), and take its `fieldName` + `layerUrl`.
+2. `custom_map_screenshot(address, service_url=<layerUrl>, field_name=<fieldName>, field_alias=<the alias>, legend_title=<a finished caption>, colors=<a ramp suited to the meaning>, class_breaks_count=5, classification_method="equal-interval")`.
+3. Place it under the section it belongs to, or in its own `.sec` if it belongs to none.
+
+`search_maps` + `map_id` are only needed when the user asks for a *named webmap* rather than a data field.
 
 ## Computations
 
@@ -112,7 +146,7 @@ Each **section** map is the VestMap `map_screenshot` for that section's own laye
 
 ## Template — the self-contained page
 
-Reproduce this exact structure and CSS, substituting the subject's real data. The values shown are an **illustration of the markup only** — replace every one with the subject's VestMap values (or drop it per the sweep rules). The comparison sections (Population, Income, Housing, Rental) all use the identical `table.cmp` markup shown; build each section's `<tbody>` from §Data, honoring the "Chips?" column. Keep the CSS byte-for-byte. Keep the single `brk` page break on the Housing section so the OM lands as two balanced pages (page 1: hero + context + Population + Income; page 2: Housing + Rental + Safety).
+Reproduce this exact structure and CSS, substituting the subject's real data. The values shown are an **illustration of the markup only** — replace every one with the subject's VestMap values (or drop it per the sweep rules). The comparison sections (Population, Income, Housing, Rental) all use the identical `table.cmp` markup shown; build each section's `<tbody>` from §Data, honoring the "Chips?" column. Keep the CSS byte-for-byte. Keep both `brk` page breaks (Housing, Safety). A full-width section map costs ~2in of column, so the OM lands as **four** pages: page 1 hero + context + Population, page 2 Income, page 3 Housing + Rental, page 4 Safety. Do not try to reclaim a page by shrinking `.secmap img` below 1.85in — that crops the property marker out of every map.
 
 ```html
 <!DOCTYPE html>
@@ -144,7 +178,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     background:var(--brand); color:#fff; padding:0.5in 0.55in 0.34in; } /* full-bleed header (top/left/right) */
   .masthead h1{ margin:0; font-size:23pt; font-weight:650; letter-spacing:-0.015em; line-height:1.1; }
   .masthead .loc{ margin-top:0.07in; font-size:10pt; font-weight:400; color:#cdddd4; letter-spacing:0.01em; }
-  .hero-map{ width:100%; height:1.95in; border-radius:7px; border:1px solid var(--line);
+  .hero-map{ width:100%; height:1.5in; border-radius:7px; border:1px solid var(--line);
     overflow:hidden; background:var(--surface-alt); }
   .leaflet-container{ background:var(--surface-alt); }
   .hero-cap{ font-size:7.6pt; color:var(--faint); text-align:right; margin-top:3px; letter-spacing:0.03em; }
@@ -158,16 +192,18 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     border-bottom:2px solid var(--brand); padding:0 2px 4px; margin-bottom:0.08in; }
   .sec__head h2{ margin:0; font-size:12.5pt; font-weight:650; letter-spacing:-0.01em; color:var(--brand); }
   .sec__head .scale{ font-size:7.8pt; letter-spacing:0.05em; text-transform:uppercase; color:var(--faint); font-weight:600; }
-  .sec--map .sec__body{ display:grid; grid-template-columns:1fr 2.45in; gap:0.22in; align-items:start; }
+  /* The map goes FULL WIDTH beneath its table, never beside it. The map image carries a
+     baked-in legend that is unreadable below ~3.4in of width, while the 4-scale table needs
+     ~4.7in — they do not both fit across 7.4in of column. Full width gives both room. */
+  .sec--map .sec__body{ display:block; }
   .sec__data{ min-width:0; }
-  .secmap{ margin:0; }
-  .secmap img{ width:100%; height:1.72in; object-fit:cover; object-position:center;
+  .secmap{ margin:0.13in 0 0; }
+  /* Source is 1120x560 (2:1), legend TOP-right, property marker dead centre. Crop from the
+     bottom only (object-position:center top) and never below 0.5x the width, or the marker
+     is lost. 7.4in x 1.85in keeps both. */
+  .secmap img{ width:100%; height:1.85in; object-fit:cover; object-position:center top;
     border-radius:6px; border:1px solid var(--line); display:block; }
   .secmap figcaption{ margin-top:3px; font-size:7.6pt; color:var(--faint); text-align:right; letter-spacing:0.03em; }
-  .legend{ display:flex; align-items:center; gap:6px; margin-top:5px; justify-content:flex-end; }
-  .legend .lbl{ font-size:7pt; color:var(--muted); font-weight:500; }
-  .legend .bar{ height:7px; width:1.35in; border-radius:3px; border:1px solid var(--line);
-    background:linear-gradient(90deg,#c0392b 0%,#e67e22 28%,#f4d03f 52%,#a9d18e 76%,#27803f 100%); }
   table.cmp{ width:100%; border-collapse:collapse; table-layout:fixed; }
   table.cmp col.m{ width:22%; }
   .cmp th{ font-size:7.8pt; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted);
@@ -212,8 +248,8 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     <div class="callout"><div class="lbl">Pop Growth &middot; ZIP, 5-yr</div><div class="val">{{POPGR_ZIP}}</div></div>
   </div>
 
-  <!-- POPULATION (expansion map; self-omits on failure → drop the figure + the sec--map class) -->
-  <section class="sec sec--map">
+  <!-- POPULATION — no map: POPGRWCYFY renders blank (see §Maps). Table only, full width. -->
+  <section class="sec">
     <div class="sec__head"><h2>Population</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
     <div class="sec__body">
       <div class="sec__data">
@@ -231,10 +267,6 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
           </tbody>
         </table>
       </div>
-      <figure class="secmap">
-        <img src="{{POP_MAP_URL}}" alt="Population growth map" />
-        <figcaption>5-yr forecasted population growth by block group</figcaption>
-      </figure>
     </div>
   </section>
 
@@ -258,8 +290,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
         </table>
       </div>
       <figure class="secmap">
-        <img src="{{INCOME_MAP_URL}}" alt="Income map" />
-        <div class="legend"><span class="lbl">Lower</span><span class="bar"></span><span class="lbl">Higher</span></div>
+        <img src="{{INCOME_MAP_URL}}" alt="Median household income map" />
         <figcaption>Median household income by block group</figcaption>
       </figure>
     </div>
@@ -285,15 +316,14 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
         </table>
       </div>
       <figure class="secmap">
-        <img src="{{HOUSING_MAP_URL}}" alt="Home price map" />
-        <div class="legend"><span class="lbl">Lower</span><span class="bar"></span><span class="lbl">Higher</span></div>
-        <figcaption>Home price index by block group</figcaption>
+        <img src="{{HOUSING_MAP_URL}}" alt="Median home value map" />
+        <figcaption>Median home value by block group</figcaption>
       </figure>
     </div>
   </section>
 
-  <!-- RENTAL (no map yet — see §Maps: no tenure layer in the map service) -->
-  <section class="sec">
+  <!-- RENTAL (median contract rent map — MEDCRNT_CY at Block Group) -->
+  <section class="sec sec--map">
     <div class="sec__head"><h2>Rental Market</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
     <div class="sec__body"><div class="sec__data">
       <table class="cmp"><colgroup><col class="m"/><col/><col/><col/><col/></colgroup>
@@ -302,11 +332,16 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
           <!-- Median rent (chips), Renter units (plain), Owner units (plain), Renter share (chips) -->
         </tbody>
       </table>
-    </div></div>
+      </div>
+      <figure class="secmap">
+        <img src="{{RENTAL_MAP_URL}}" alt="Median contract rent map" />
+        <figcaption>Median contract rent by block group</figcaption>
+      </figure>
+    </div>
   </section>
 
-  <!-- SAFETY (crime map; self-omits on failure). Give a cell 'hi' only when its index > 100. -->
-  <section class="sec sec--map">
+  <!-- SAFETY (total crime index map; self-omits on failure). Give a cell 'hi' only when its index > 100. -->
+  <section class="sec sec--map brk">
     <div class="sec__head"><h2>Safety</h2><span class="scale">Block Group &middot; crime index, 100 = U.S. avg</span></div>
     <div class="sec__body">
       <div class="sec__data">
@@ -324,8 +359,8 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
         </div>
       </div>
       <figure class="secmap">
-        <img src="{{SAFETY_MAP_URL}}" alt="Crime map" />
-        <figcaption>Crime index by block group</figcaption>
+        <img src="{{SAFETY_MAP_URL}}" alt="Total crime index map" />
+        <figcaption>Total crime index by block group</figcaption>
       </figure>
     </div>
   </section>
@@ -383,7 +418,7 @@ Rendered only on explicit request; otherwise absent. Same rules (VestMap-sourced
 |---|---|---|
 | "workforce", "occupations" | Occupation mix / collar shares | the 13 `OCC*_CY` fields at each scale |
 | "include risk", "FEMA", "hazards" | Natural-hazard risk (Tract) | `search_real_estate_data("National Risk Index")` → `RISK_SCORE`, `RISK_RATNG`, `SOVI_SCORE`, `RESL_SCORE`, top hazards by `_RISKS` |
-| "include schools" | Nearest schools + district | `get_section_data(address, "schools")`; pair with `map_screenshot(address, "schools")` |
+| "include schools" | Nearest schools + district | `get_section_data(address, "schools")`; pair with a `custom_map_screenshot` on the schools layer resolved via `search_real_estate_data` |
 | "education", "degree attainment" | 5-bucket education by scale | `NOHS_CY`, `HSGRAD_CY`, `SMCOLL_CY`, `BACHDEG_CY`, `GRADDEG_CY` |
 | "income distribution", "HINC buckets" | 9-bucket income distribution | `HINC0_CY`…`HINC200_CY`, `TOTHH_CY` |
 | "businesses", "MSA data" | Business counts (CBSA) | `N01_BUS`, `N01_EMP` on the CBSA layer |
