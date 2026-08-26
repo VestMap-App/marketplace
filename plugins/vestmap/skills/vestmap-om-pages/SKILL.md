@@ -113,11 +113,21 @@ address:               <the subject address>
 - **`map_id` is unnecessary.** Every registry entry renders correctly on the plain-basemap fallback. Passing a webmap ID changes only the basemap underneath, never the data layer.
 - **The image is 1120×560 (2:1) with the legend in the TOP-RIGHT corner.** The slot must preserve that: never crop from the top, or the legend is the first thing lost, and never crop below 50% of the source height, or the property marker (dead centre) is lost. See the `.secmap` CSS.
 
-### Population has no map (yet)
+### Maps that are wired but omitted today
 
-`POPGRWCYFY` renders a **blank** map: one national outlier (a block group at +252.73%/yr) stretches the equal-interval breaks so far that every block group in any real market lands in the bottom class. `TOTPOP_CY` fails the same way. Both return *success* with a valid image, so graceful-failure cannot catch it — the map must be **omitted deliberately**: leave `{{POP_MAP_URL}}` empty and drop the Population `<figure>`. The section renders as a full-width table, which is correct and complete.
+Two maps are fully specified here and deliberately **not rendered**, because both currently
+produce a *blank* image that the service returns as success — graceful-failure cannot catch
+them, so they must be suppressed on purpose. Leave the slot empty and drop the `<figure>`
+(and the `sec--map` class if the section has no other map).
 
-This restores automatically the day `custom_map_screenshot` can classify on the visible extent (or accepts explicit break values) — at that point wire Population in as `POPGRWCYFY` at `/12` with a blue ramp and nothing else here changes.
+| Map | Section | Intended field / layer | Why it is off |
+|---|---|---|---|
+| Population growth | Population | `POPGRWCYFY` at `…2024/MapServer/12`, blue ramp | One national outlier (a block group at +252.73 %/yr) stretches the equal-interval breaks so far that every block group in any real market lands in the bottom class. `TOTPOP_CY` fails identically (national max 36,584). |
+| Renter tenure | Rental Market (2nd map) | `RENTER_CY` at `…2024/MapServer/12`, blue-purple ramp | Two separate blockers. (a) There is **no renter-share field on the layer** — only counts (`RENTER_CY`, `OWNER_CY`, `RENTER_FY`, `OWNER_FY`), and `PCTRENTER` / `PCTRENT_CY` / `RENTER_CY_P` do not exist. A share map needs a `normalization_field` the tool does not accept. (b) The raw count map blanks out anyway, for the same outlier reason as Population (national max 6,042 households). |
+
+Both restore automatically the day `custom_map_screenshot` can classify on the visible extent
+(or accepts explicit break values); the tenure map additionally needs a normalization field to
+show *share* rather than raw households. Nothing else in this file changes when they land.
 
 ### Graceful failure (applies to every map)
 
