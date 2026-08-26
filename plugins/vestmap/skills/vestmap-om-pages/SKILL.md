@@ -306,7 +306,7 @@ Reproduce this exact structure and CSS, substituting the subject's real data. Th
     </div>
   </section>
 
-  <!-- HOUSING (hpi map) — 'brk' forces the page break here -->
+  <!-- HOUSING (median home value map) — 'brk' forces the page break here -->
   <section class="sec sec--map brk">
     <div class="sec__head"><h2>Housing Values</h2><span class="scale">Block &middot; Tract &middot; ZIP &middot; County</span></div>
     <div class="sec__body">
