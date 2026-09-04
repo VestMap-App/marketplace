@@ -142,7 +142,7 @@ The five-step mint→forest ramp (low→high) is the page's map signature — it
 
 ### Crop geometry (why the CSS values are what they are)
 
-- **Default panel slot** (`.mapwrap` at aspect `1.7/1` holding `.mapimg` at `width:195%; left:50%; top:-49.7%; transform:translateX(-50%)`): the image is enlarged and anchored so the panel shows raw pixels x ≈ 273–847, y ≈ 168–506 of the 1120×560 image — the baked legend (y < 160) and the attribution strip (y > 528) both fall outside the frame, and the pin lands at the horizontal centre, one third down. That is what lets the panel carry the clean HTML legend beneath. Do not reduce the zoom below 190% or move `top` above −47%: the legend's bottom edge re-enters the frame.
+- **Default panel slot** (`.mapwrap` at aspect `1.8/1` holding `.mapimg` at `width:150%`, centred on both axes): the image is enlarged 1.5× and centred, so the panel shows raw pixels x ≈ 187–933, y ≈ 72–487 of the 1120×560 image — the baked legend (x ≥ 950) sits just outside the right edge, the attribution strip (y > 528) below the bottom edge, and the pin stays dead centre. That is what lets the panel carry the clean HTML legend beneath. The zoom is what hides the legend: never reduce it below 148% (the legend's left edge re-enters the frame); the aspect may sit anywhere between 1.6 and 1.9.
 - **Map Center slot** (`.mapimg.wide`, aspect `2.35/1`, `object-fit:cover; object-position:center top`): full width, cropped only from the bottom, so the baked legend stays visible (it is the legend for that layout) and the pin (y-centre) survives. Never crop a wide slot from the top.
 
 ### Transient errors are NOT failures — retry once before omitting
@@ -250,10 +250,10 @@ body.light .wm .lg-forest{ display:block; }
 .phead{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.07in; }
 .phead .t{ font-size:7.2pt; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--sage); }
 .phead .r{ font-size:6.6pt; color:var(--faint); }
-.mapwrap{ position:relative; width:100%; aspect-ratio:1.7/1; overflow:hidden;
+.mapwrap{ position:relative; width:100%; aspect-ratio:1.8/1; overflow:hidden;
   border-radius:8px; border:1px solid var(--hair); }
-.mapwrap .mapimg{ position:absolute; width:195%; height:auto; left:50%; top:-49.7%;
-  transform:translateX(-50%); display:block; }
+.mapwrap .mapimg{ position:absolute; width:150%; height:auto; left:50%; top:50%;
+  transform:translate(-50%,-50%); display:block; }
 .mapimg.wide{ width:100%; aspect-ratio:2.35/1; object-fit:cover; object-position:center top;
   display:block; border-radius:8px; border:1px solid var(--hair); }
 .legt{ margin-top:0.08in; font-size:6.8pt; font-weight:600; letter-spacing:0.14em;
@@ -268,16 +268,16 @@ body.light .wm .lg-forest{ display:block; }
 .bars .bt{ height:6px; border-radius:3px; background:var(--track); position:relative; overflow:hidden; }
 .bars .bf{ position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--green); }
 .bars .bv{ font-family:var(--font-mono); font-weight:600; font-size:8pt; text-align:right; color:var(--ink); }
-.occ .sec{ padding:0.02in 0 0.07in; }
-.occ .sec + .sec{ border-top:1px solid var(--hair); padding-top:0.07in; }
-.occ .sh{ font-size:9.5pt; font-weight:700; color:var(--ink); letter-spacing:0.02em;
-  padding-bottom:4px; border-bottom:1px solid var(--hair); margin-bottom:0.07in; }
+.occ .sec{ padding:0.02in 0 0.06in; }
+.occ .sec + .sec{ border-top:1px solid var(--hair); padding-top:0.06in; }
+.occ .sh{ font-size:9.5pt; font-weight:700; color:var(--ink); letter-spacing:0.04em; text-transform:uppercase;
+  padding-bottom:4px; border-bottom:1px solid var(--hair); margin-bottom:0.06in; }
 .rings{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.06in; }
 .rg{ text-align:center; }
 .rg svg{ display:block; margin:0 auto; }
 .rg .pct{ font-family:var(--font-mono); font-weight:700; font-size:9.5pt; fill:var(--ink); }
 .rg .rk{ font-size:6.8pt; color:var(--muted); line-height:1.3; margin-top:3px; }
-.occ .dom{ display:flex; justify-content:space-between; align-items:baseline; margin-top:0.06in; }
+.occ .dom{ display:flex; justify-content:space-between; align-items:baseline; margin-top:0.05in; }
 .occ .dom .d{ font-size:8pt; font-weight:700; }
 .occ .dom .d.wc{ color:var(--green); } .occ .dom .d.bc{ color:var(--blue); } .occ .dom .d.sv{ color:var(--clay); }
 .occ .dom .u{ font-size:6.5pt; color:var(--faint); }
@@ -287,7 +287,7 @@ table.sum{ width:100%; border-collapse:collapse; }
 .sum th{ font-size:6.8pt; letter-spacing:0.12em; text-transform:uppercase; color:var(--sage);
   font-weight:600; text-align:right; padding:5px 6px; border-bottom:1px solid var(--line); }
 .sum th:first-child{ text-align:left; padding-left:2px; }
-.sum td{ padding:5px 6px; text-align:right; font-family:var(--font-mono); font-size:8.5pt;
+.sum td{ padding:4.5px 6px; text-align:right; font-family:var(--font-mono); font-size:8.5pt;
   border-bottom:1px solid var(--hair); color:var(--ink); vertical-align:top; }
 .sum tr:last-child td{ border-bottom:none; }
 .sum td.m{ text-align:left; padding-left:2px; font-family:var(--font-body); font-size:7.6pt; color:var(--muted); }
@@ -357,7 +357,7 @@ table.sum{ width:100%; border-collapse:collapse; }
         <div class="rings">
           <!-- ring svg: r=25, C=157.1; arc dasharray = pct/100×157.1 followed by 157.1;
                arc stroke = var(--green) white collar · var(--blue) blue collar · var(--clay) service -->
-          <div class="rg"><svg width="58" height="58" viewBox="0 0 64 64">
+          <div class="rg"><svg width="52" height="52" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="25" fill="none" stroke="var(--track)" stroke-width="5.5"/>
               <circle cx="32" cy="32" r="25" fill="none" stroke="var(--green)" stroke-width="5.5" stroke-linecap="round"
                 stroke-dasharray="113.3 157.1" transform="rotate(-90 32 32)"/>
