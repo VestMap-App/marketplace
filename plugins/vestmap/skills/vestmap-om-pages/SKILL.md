@@ -128,7 +128,7 @@ The five-step mint→forest ramp (low→high) is the page's map signature — it
 ### The HTML legend — transcribe the baked breaks
 
 1. Open the returned image (download it and view it). Read the five legend rows top→bottom (highest class first).
-2. **Degenerate check.** A quantile legend is degenerate when two adjacent breaks are equal, or the bottom class ends at 0. If degenerate, retry the call once with identical arguments; if still degenerate, switch to `classification_method: "equal-interval"` (breaks are then national and fixed — see the fallback labels below).
+2. **Degenerate check.** A quantile legend is degenerate when two adjacent breaks are equal, or the bottom class ends at 0. **Exception — the field cap.** Esri top-codes `MEDHINC_CY` at 200,001 (and `MEDCRNT_CY` at 3,500), so in high-income metros the top class reads `200,001 - 200,001`. That is the top-coded class, not a collapse: keep the map, label the top class `$200k+` (rent: `$3,500+`) and the class beneath it `${b3}–200k` — e.g. baked `<= 94,701 / 94,701 - 129,818 / 129,818 - 156,611 / 156,611 - 200,001 / 200,001 - 200,001` → `<$95k · $95–130k · $130–157k · $157–200k · $200k+`. If degenerate otherwise, retry the call once with identical arguments; if still degenerate, switch to `classification_method: "equal-interval"` (breaks are then national and fixed — see the fallback labels below).
 3. Write the five HTML labels **low→high** (the legend row runs left→right, light→dark) from the actual breaks, rounded for legibility — income to the nearest $1k, rent to the nearest $10:
 
 | | first | middle three | last |
