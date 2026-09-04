@@ -12,7 +12,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 
 - **PDF is the default output.** Write the HTML to a temp file, convert with headless Chrome (see §PDF), print the PDF path. Only output HTML instead if the user says "HTML" / "html only".
 - **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `custom_map_screenshot`, `search_real_estate_data`) or to a computation in §Computations over those values. If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
-- **Missing data disappears — it is never announced.** Null value → drop that cell/segment. Summary-table row with fewer than 2 non-null value cells → drop the row. KPI card whose value is null → drop the card (the grid reflows to 2). Ring whose numerator or base is null → drop that ring. Occupation section (Block / Tract / ZIP) with no rings → drop the section. Panel left with nothing to show → drop the panel (see §Graceful failure for the map panel). The page never contains "N/A", "—" as a placeholder, "data unavailable", tool names, field names, or any note about what was dropped. The chat reply after generation is equally quiet (see §Respond).
+- **Missing data disappears — it is never announced.** Null value → drop that cell/segment. Summary-table row with fewer than 2 non-null value cells → drop the row. KPI card whose value is null → drop the card and add class `two` to `.kpis` (the remaining pair keeps the 60 / 40 split so the right card stays flush with the panel below it). Ring whose numerator or base is null → drop that ring. Occupation section (Block / Tract / ZIP) with no rings → drop the section. Panel left with nothing to show → drop the panel (see §Graceful failure for the map panel). The page never contains "N/A", "—" as a placeholder, "data unavailable", tool names, field names, or any note about what was dropped. The chat reply after generation is equally quiet (see §Respond).
 - **Different scales differ — that is normal, never a problem.** Block / Tract / ZIP / County / National cover different areas; report values as-is. Never reconcile or describe a cross-scale difference as an anomaly.
 - **No Tapestry, ever.** Never call `get_section_data("demographics")` for numbers and never put a Tapestry segment/grade/lifestyle label on the page.
 - **Numbers-only prose.** The lede and panel lines are formulaic sentences (patterns in §Computations) whose every figure is a tool value or documented computation. No "desirable", "up-and-coming", "affluent", "safe" — the only permitted qualifiers are numeric relations (×, pt, %, "the 30% of gross income rent burden standard") and the fixed comparator phrases in §Computations.
@@ -231,7 +231,9 @@ body.light .wm .lg-forest{ display:block; }
 .rule{ border:none; border-top:1px solid var(--line); margin:0.10in 0 0.10in; }
 .lede{ font-size:9.2pt; line-height:1.5; color:var(--muted); }
 .lede b{ color:var(--ink); font-weight:600; }
-.kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.12in; margin-top:0.11in; }
+/* KPI columns share the panel grid: cards 1–2 split the 60% left column, card 3 = the right column */
+.kpis{ display:grid; grid-template-columns:calc(30% - 0.06in) calc(30% - 0.06in) 1fr; gap:0.12in; margin-top:0.11in; }
+.kpis.two{ grid-template-columns:60% 1fr; }
 .kpi{ position:relative; background:var(--panel); border:1px solid var(--line);
   border-radius:12px; padding:0.10in 0.13in 0.11in; }
 .kpi .lbl{ font-size:6.8pt; font-weight:600; letter-spacing:0.14em;
