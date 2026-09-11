@@ -6,7 +6,7 @@ user-invocable: true
 
 # VestMap OM Pages
 
-Generate a presentation-ready Offering Memorandum PDF for a single US address. The default output is **one Letter page**: the Demographics dashboard. All numbers come from VestMap MCP tool calls; the page carries a real VestMap choropleth. This file is **self-contained**: the layout, the full HTML/CSS template, the brand tokens, and the PDF command are all below — do not look for or depend on any `references/…` or `templates/…` file, and do not fetch anything over the network for page content beyond the VestMap map image, the vestmap.com logo lockup, and the Google-hosted webfonts the template links.
+Generate a presentation-ready Offering Memorandum PDF for a single US address. The default output is **one Letter page**: the Demographics dashboard. All numbers come from VestMap MCP tool calls; the page carries a real VestMap choropleth. This file is **self-contained**: the layout, the full HTML/CSS template, the brand tokens, and the PDF command are all below — do not look for or depend on any `references/…` or `templates/…` file, and do not fetch anything over the network for page content beyond the VestMap map image and the Google-hosted webfonts the template links — the logo lockup is embedded in the template itself (§Logo).
 
 ## Hard rules
 
@@ -18,7 +18,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 - **Numbers-only prose.** The lede and panel lines are formulaic sentences (patterns in §Computations) whose every figure is a tool value or documented computation. No "desirable", "up-and-coming", "affluent", "safe" — the only permitted qualifiers are numeric relations (×, pt, %, "the 30% of gross income rent burden standard") and the fixed comparator phrases in §Computations.
 - **Market-agnostic.** A market name appears only in the masthead (address, city/state, county), the county/ZIP column labels, and the growth-bar labels. Nothing city-specific is hardcoded.
 - **The masthead is eyebrow → address → context line.** Eyebrow = the page title in small caps ("DEMOGRAPHICS" / "RENTAL MARKET"); the H1 is the **full subject address**; the context line is "{City}, {ST} · {County Name} · ZIP {zip}". No "Offering Memorandum" eyebrow, ever. The VestMap lockup sits top-right with the tagline "REAL ESTATE INTELLIGENCE" beneath it.
-- **Brand tokens are locked to vestmap.com.** The CSS `:root` block below mirrors the live `colors_and_type.css` (forest-900 page `#11221E`, forest-700 panels `#1E3B34`, mint `#E6F1EB`, sage `#9EB39A`, success green `#2E8B65`, 12–16px radii). Type is **Inter** throughout — the H1 is the site header's big-sans treatment (Inter 700, −0.025em), KPI values are Inter 700 — with **JetBrains Mono** for every figure inside a panel or table (ring percentages, bar values, table cells). The masthead logo is the real lockup: `https://vestmap.com/assets/logo-vestmap-inverted.png` on dark, `…/logo-vestmap-forest.png` on the light variant — never draw a substitute mark. Never restyle per market or per user.
+- **Brand tokens are locked to vestmap.com.** The CSS `:root` block below mirrors the live `colors_and_type.css` (forest-900 page `#11221E`, forest-700 panels `#1E3B34`, mint `#E6F1EB`, sage `#9EB39A`, success green `#2E8B65`, 12–16px radii). Type is **Inter** throughout — the H1 is the site header's big-sans treatment (Inter 700, −0.025em), KPI values are Inter 700 — with **JetBrains Mono** for every figure inside a panel or table (ring percentages, bar values, table cells). The masthead logo is the real lockup, **embedded in the template** as a base64 alpha silhouette tinted by `flood-color:var(--mint)` — mint `#E6F1EB` on dark, forest `#1E3B34` on the light variant, the exact colours of the two published PNGs. Reproduce the `<svg class="lockup">` block and its data URI verbatim; never draw a substitute mark and never re-point it at a `vestmap.com` URL (§Logo). Never restyle per market or per user.
 - **The page must stay one page.** The template's sizes and spacings are tuned so the full content lands on 11in with `@page{margin:0}` — the dark page is full-bleed; never let Chrome add its default white margins. Do not enlarge fonts, paddings, the lede (keep it ≤4 rendered lines), or the map aspect ratio; if content must grow, something else must shrink or be dropped.
 
 ## Workflow
@@ -222,10 +222,8 @@ html,body{ background:var(--bg); color:var(--ink);
 .hd h1{ font-weight:700; font-size:17pt; letter-spacing:-0.025em; line-height:1.1; color:var(--ink); margin-top:3px; }
 .hd .ctx{ margin-top:4px; font-size:8.5pt; color:var(--muted); }
 .wm{ display:flex; flex-direction:column; align-items:flex-end; padding-top:4px; flex:none; }
-.wm img{ height:0.23in; width:auto; display:block; }
-.wm .lg-forest{ display:none; }
-body.light .wm .lg-inverted{ display:none; }
-body.light .wm .lg-forest{ display:block; }
+.wm .lockup{ height:0.23in; width:auto; display:block; }
+.wm .lockup feFlood{ flood-color:var(--mint); flood-opacity:1; }
 .wm .tag{ margin-top:5px; font-family:var(--font-mono); font-size:6.3pt; letter-spacing:0.14em;
   text-transform:uppercase; color:var(--sage); }
 .rule{ border:none; border-top:1px solid var(--line); margin:0.10in 0 0.10in; }
@@ -306,8 +304,11 @@ table.sum{ width:100%; border-collapse:collapse; }
       <h1>511 Campbell St, Kansas City, MO 64106</h1>
       <div class="ctx">Kansas City, MO &middot; Jackson County &middot; ZIP 64106</div></div>
     <div class="wm">
-      <img class="lg-inverted" src="https://vestmap.com/assets/logo-vestmap-inverted.png" alt="VestMap"/>
-      <img class="lg-forest" src="https://vestmap.com/assets/logo-vestmap-forest.png" alt="VestMap"/>
+      <svg class="lockup" viewBox="0 0 984 172" role="img" aria-label="VestMap">
+        <filter id="vmink" x="0" y="0" width="100%" height="100%">
+          <feFlood result="ink"/><feComposite in="ink" in2="SourceAlpha" operator="in"/></filter>
+        <image filter="url(#vmink)" width="984" height="172" href="data:image/webp;base64,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"/>
+      </svg>
       <div class="tag">Real Estate Intelligence</div>
     </div>
   </div>
@@ -388,6 +389,31 @@ table.sum{ width:100%; border-collapse:collapse; }
   <div class="ft"><span>Source: Esri Demographics 2024 &middot; ACS 5-yr estimates &middot; VestMap GIS</span><span>Generated {{Month D, YYYY}}</span></div>
 </div></body></html>
 ```
+
+## Logo — embedded, never fetched
+
+The masthead lockup is **inlined in the template** as a lossless WebP data URI. It is not fetched from
+`vestmap.com`, because a headless-Chrome render has no guarantee of egress to that domain: sandboxed and
+cloud runners commonly reach `storage.googleapis.com` (the map image) and `fonts.googleapis.com` (the
+webfonts) while a custom domain resolves to nothing, and the page then prints a broken-image glyph and the
+alt text where the brand mark belongs. Embedding removes the only same-page dependency that could fail.
+
+The embedded asset is the published lockup's own alpha silhouette at 560×98 (≈426 dpi at the rendered
+0.23in), flood-filled white. Both published PNGs — `logo-vestmap-inverted.png` and `logo-vestmap-forest.png`
+— are pixel-identical in alpha and differ only in flat fill, so one silhouette plus `flood-color:var(--mint)`
+reproduces each exactly: `--mint` is `#E6F1EB` on dark and `#1E3B34` on the light variant, which are those
+two files' fill colours.
+
+- **Never convert the lockup to a CSS mask.** `-webkit-mask-image` / `mask-image` are broken in Chrome's PDF
+  printer: the mask stops applying past roughly 2in of element width and the remainder of the box prints as a
+  solid filled slab. This reproduces with both PNG and WebP masks. The `<image>` + `feFlood`/`feComposite`
+  filter above is the form that prints correctly at every size — keep it.
+- **One page per document keeps `id="vmink"` unique.** If a run emits more than one page into a single HTML
+  file (default page + Rental page), give each page's filter a distinct id — `vmink1`, `vmink2` — and point
+  that page's `filter="url(#…)"` at it; duplicate ids resolve to the first filter in the document.
+- To regenerate the asset, take the alpha channel of `https://vestmap.com/assets/logo-vestmap-inverted.png`
+  (984×172), resize to 560×98, quantise alpha to 32 levels, and save it lossless-WebP as white RGB + that
+  alpha.
 
 ## Variants (only when the user names them)
 
