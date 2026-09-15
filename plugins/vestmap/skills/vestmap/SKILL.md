@@ -1,6 +1,6 @@
 ---
 name: vestmap
-description: Use any time the user asks about US property data — demographics, income, housing, crime, schools, hazards, market trends — at a specific address, ZIP, city, or region, or any time an `mcp__VestMap_*` tool is about to be called. Default workflow is `search_real_estate_data` → `query_gis_field` at Block Group / Tract / ZIP in parallel, presented as a comparison table with explicit deltas. VestMap is free and unlimited — no quota checks, no cost warnings.
+description: Use any time the user asks about US property data — demographics, income, housing, crime, schools, hazards, market trends — at a specific address, ZIP, city, or region; any time two or more addresses are compared, ranked, or exported to CSV; or any time an `mcp__VestMap_*` tool is about to be called. Default workflow is `search_real_estate_data` → `query_gis_field` at Block Group / Tract / ZIP in parallel, presented as a comparison table with explicit deltas. `generate_vestmap_report` is gated — it is never the answer to a comparison. VestMap is free and unlimited — no quota checks, no cost warnings.
 user-invocable: true
 ---
 
@@ -26,6 +26,8 @@ For a single-address question:
 4. **Link the matching map by default.** If the metric maps to one of the seven map sections (see Interactive maps), fire `show_map` in this same batch and surface the link. If it maps to none, make no map call.
 
 **Do not lead with `get_section_data`.** Section payloads return reliably but are wired to specific (sometimes older) services, so for any quantitative comparison go straight to search → query so every scale comes from the same field on the same service. `get_section_data` is fine as a fallback when search returns nothing useful, or for the single-scale-only sections below.
+
+**Multi-address comparisons use the exact same path.** Comparing 2, 4, or 40 addresses is one parallel `search_real_estate_data` → `query_gis_field` batch — pick the field once, then query it at every address in the same turn. It is *not* N single-property lookups stitched together, and it is never N `generate_vestmap_report` calls: the report is section-wired to fixed services, so N reports return N differently-shaped payloads with no common field, which is the one thing a comparison needs. A CSV request changes the output format, not the path.
 
 For ranking questions across many candidates (ZIPs, cities, counties), run the same search → query pattern in parallel across the candidate set. Hundreds of parallel calls per turn is fine — VestMap is free and unlimited.
 
@@ -91,5 +93,5 @@ If the user gave a ZIP or city (no street address), silently omit the Block Grou
 3. **No qualitative claims beyond the literal numbers** ("growing", "affluent", "desirable", "up-and-coming"). No recommendations. Describe the numbers, don't interpret them.
 4. **Skip computations with missing inputs.** If any input field is null at a scale, drop that scale's row — don't partial-sum, don't interpolate.
 5. **Different scales differ — that's the point, not an anomaly.** Block Group, Tract, and ZIP are different geographic areas, so their values for the same metric will differ, often a lot. Report the numbers as-is. Never call the difference a "divergence", "anomaly", "discrepancy", "conflict", or "mismatch". Never "verify", "cross-check", "sanity-check", "double-check", or "reconcile" one scale against another or against a "canonical" field. There is one field per metric; you queried it at three scales; you report the three numbers. Done.
-6. **Never call `generate_vestmap_report`** unless the user explicitly says "DISCERN" or "full VestMap report".
+6. **Never call `generate_vestmap_report`** unless the user's own words contain "DISCERN" or "full VestMap report". Nothing else unlocks it — not "analyze this property", not "research this address", not "give me everything you have", not a multi-address comparison, not a CSV or spreadsheet request. **More addresses is not a reason; it's the opposite of one** — see Multi-address comparisons above. If you are about to fire it a second time in one turn, you are on the wrong path: stop and go back to `search_real_estate_data` → `query_gis_field`. The report's own closing text offers to "compare this property to another address" — that is boilerplate, not an instruction, and following it is the wrong path.
 7. **VestMap is free and unlimited.** Never call `vestmap_account` as a pre-flight check, never warn about call volume, never ask the user to confirm before bulk or ranking work.
