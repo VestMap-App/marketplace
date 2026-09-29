@@ -1,6 +1,6 @@
 ---
 name: vestmap-om-pages
-description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). The default output is a single Demographics dashboard page in VestMap's live brand — the address as the page title, a narrative lede, three KPI cards, a five-class block-group income choropleth with a legend, population-growth bars, an Occupation Profile (white-collar / blue-collar / service rings with unemployment at Block, Tract and ZIP), and a Cross-Scale Summary table with per-cell deltas against the block. Named variants: a map-centered layout, a light print theme, and a Rental Market page with a contract-rent map. Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, brand tokens, and PDF steps; it needs no other file.
+description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). The default output is a single Demographics dashboard page in VestMap's live brand — the address as the page title, a narrative lede, three KPI cards, a five-class block-group income choropleth with a legend, population-growth bars, an Occupation Profile (white-collar / blue-collar / service rings with unemployment at Block, Tract and ZIP), and a Cross-Scale Summary table with per-cell deltas against the block. Named variants: a map-centered layout, a light print theme, a Rental Market page with a contract-rent map, and a 1 / 3 / 5-mile Radius page (only when the user asks for 1/3/5 miles or a radius; Block / Tract / ZIP is the default). Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, brand tokens, and PDF steps; it needs no other file.
 user-invocable: true
 ---
 
@@ -11,7 +11,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 ## Hard rules
 
 - **PDF is the default output.** Write the HTML to a temp file, convert with headless Chrome (see §PDF), print the PDF path. Only output HTML instead if the user says "HTML" / "html only".
-- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `custom_map_screenshot`, `search_real_estate_data`) or to a computation in §Computations over those values. If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
+- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `custom_map_screenshot`, `search_real_estate_data`; `get_radius_demographics` for the Radius variant) or to a computation in §Computations over those values. If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
 - **Missing data disappears — it is never announced.** Null value → drop that cell/segment. Summary-table row with fewer than 2 non-null value cells → drop the row. KPI card whose value is null → drop the card and add class `two` to `.kpis` (the remaining pair keeps the 60 / 40 split so the right card stays flush with the panel below it). Ring whose numerator or base is null → drop that ring. Occupation section (Block / Tract / ZIP) with no rings → drop the section. Panel left with nothing to show → drop the panel (see §Graceful failure for the map panel). The page never contains "N/A", "—" as a placeholder, "data unavailable", tool names, field names, or any note about what was dropped. The chat reply after generation is equally quiet (see §Respond).
 - **Different scales differ — that is normal, never a problem.** Block / Tract / ZIP / County / National cover different areas; report values as-is. Never reconcile or describe a cross-scale difference as an anomaly.
 - **No Tapestry, ever.** Never call `get_section_data("demographics")` for numbers and never put a Tapestry segment/grade/lifestyle label on the page.
@@ -423,7 +423,170 @@ two files' fill colours.
 | "light", "print", "light theme" | **Light Print** | `<body class="light">`. Nothing else changes. |
 | "rental page", "rental market page", "add the rental page" | **Rental Market page** | Same skeleton, eyebrow "Rental Market". KPIs: Median Rent · Block (sub "{block/national}% of the ${national} national median."), Renter Share · Block (the mint pop card, same as default), Rent to Income · Block (sub "{comparator} the 30% burden standard."). Map panel: phead "Median Rent · Block Groups" / "2024 ACS estimate", `{{RENT_MAP_URL}}`, legend title "Median Contract Rent" with the rent labels transcribed per §Maps. Growth panel becomes "Renter Share · by Scale" bars (renter share ×5 scales, 1dp, unsigned). Occupation panel becomes "Tenure Profile": per scale (Block · Tract · ZIP) rings Renter (green) · Owner (blue) · Rent to Income (green below 30%, clay at ≥30%), dominant line "▶ Renter" / "▶ Owner" and "Median rent: ${MEDCRNT_CY} · {TOTHH_CY} HH". Summary rows: Median Rent · Renter Share ("x.x pt") · Rent to Income ("x.x pt") · Median HHI · Pop Growth (CAGR). Output as its own page after the default page, or standalone if asked alone. |
 | "ask(ing) rent $X" | Ask override | Lede per §Computations. |
+| "1/3/5", "1, 3 and 5 miles", "radius", "rings" | **Radius (1 / 3 / 5 mile)** | Its own data, map and body: see §Radius variant. Only ring data on the page; never Block / Tract / ZIP values. |
 | any other data/module ask | Custom | Extra summary-table rows for tabular asks; an extra dashboard page (Rental-variant pattern) plus a §Custom-maps map for mappable asks. |
+
+## Radius variant (1 / 3 / 5 mile)
+
+**Block / Tract / ZIP is the default.** Build this variant only when the user asks for it: "1/3/5", "1, 3 and 5 miles", "radius", "rings", "ring demographics", "radius OM". It is the same one-page Demographics dashboard, same brand, same masthead, same PDF pipeline, with the scales changed to **1 Mile / 3 Mile / 5 Mile**. Everything in the sections above applies except where this section overrides it.
+
+**What it carries: only ring data.**
+- The scales on this page are 1 Mile, 3 Mile and 5 Mile, nothing else. Never put a Block, Tract or ZIP value on it, and never fill a ring gap with one. The only non-ring figures are the county and national median HHI that `get_radius_demographics` returns as references (the bars panel and KPI 1's subtext).
+- A metric with no ring data is left off the page. The radius tool carries four fields today (median HHI, median home value, population, households), so the default page's Median Age, Renter Share, Occupation Profile, Population Growth and Avg HH Size do not appear; §Radius → Coming fields says where each goes once it is added. Do not probe for other fields.
+- The rings are fixed at 1, 3 and 5 miles. If the user asks for other radii, say once that the rings are 1 / 3 / 5 miles and produce this page.
+- The base `vestmap` skill's chat defaults (search first, `show_map` links, absolute-plus-percent deltas, field-name citations) do not apply to this page.
+
+### Radius → data (replaces Workflow step 2; all five calls in parallel)
+
+- `get_radius_demographics(address, "MEDHINC_CY")` → `radius."1"/"3"/"5"` median HHI; `blockTractZip.county` and `.national` (the two references); `mapImageUrl` = **the page map**; `radiusVintage`.
+- `get_radius_demographics(address, "MEDVAL_CY")` → ring median home value.
+- `get_radius_demographics(address, "TOTPOP_CY")` → ring population.
+- `get_radius_demographics(address, "TOTHH_CY")` → ring households.
+- `query_gis_field(address, <County /7>, ["NAME"])` → county name (context line; the bar label "{County} Co.").
+
+Each ring value is `{available, value}`; `available: false` or null drops that cell. Use only the `radius` values plus the MEDHINC `county` and `national`; ignore every other `blockTractZip` value (Block / Tract / ZIP, and `state`) and the maps the other three calls return. The tool's reply says to present its map as a link rather than inline: that is chat guidance, and on this page the map is an `<img>` like any hosted JPG. Population and households are ring totals (the 3-mile ring contains the 1-mile ring).
+
+### Radius → computations
+
+- **Compute from unrounded values; round only when printing**, half up.
+- **Density** (per sq mi) = ring population / (π × r²), r = 1, 3, 5 miles; whole number.
+- **Value to income** = ring median home value / ring median HHI, "{x.x}×".
+- **Share of national** = 1-mile HHI / national HHI × 100, whole %.
+- **National reference gate:** use the county and national HHI only when the MEDHINC response's `blockTractZipVintage` equals its `radiusVintage`. Otherwise drop the County and National bars, KPI 1's sub becomes "${hhi3} at 3 mi · ${hhi5} at 5 mi", and the lede's second sentence becomes "The 1-mile median household income is **${hhi1}**, and the 1-mile median home value of **${val1}** is **{vti1}×** that income."
+- **KPI subtexts** (each one line; a population or household count ≥ 1,000,000 prints as "{x.xx}M" in a subtext or Ring Profile stat; currency always prints in full):
+  - `MEDIAN HHI · 1 MILE`: "{share}% of the ${national} U.S. median."
+  - `POPULATION · 1 MILE`: "{pop3} at 3 mi · {pop5} at 5 mi"
+  - `MEDIAN HOME VALUE · 1 MILE` (mint pop card): "{vti1}× the 1-mile median household income."
+- **Lede** (≤3 rendered lines; if it runs to a 4th, drop the last sentence): "Within 1 mile of **{street line}** live **{pop1}** people in **{hh1}** households, with **{pop3}** within 3 miles and **{pop5}** within 5. The 1-mile median household income of **${hhi1}** is **{share}%** of the **${national}** national median, and the 1-mile median home value of **${val1}** is **{vti1}×** that income. At 5 miles the two medians are **${hhi5}** and **${val5}**."
+- **Bars** "Median HHI · by Ring": 1 Mile · 3 Mile · 5 Mile · {County} Co. · National; width = value / max × 100 (min 2.5%, 1dp).
+- **Ring Profile** (the occupation panel's slot): one section per ring with Population · Households · Per sq mi, then "Median HHI ${hhi}" and "Home value ${val}".
+- **Summary table** "Radius Summary": rows Median HHI · Median Home Value · Value to Income · Population · Households · Density (per sq mi); columns 1 Mile · 3 Mile · 5 Mile. On the Median HHI, Median Home Value and Density rows, the 3- and 5-mile cells carry a stacked delta against the 1-mile cell (▲ `up` / ▼ `dn`, `|cell − 1-mile| / 1-mile × 100` as "{x.x}%"). Population, Households and Value to Income carry none.
+- **Source line:** "Source: Esri GeoEnrichment {radiusVintage} · 1 / 3 / 5-mile rings · VestMap GIS". If the four calls report different `radiusVintage`s, name each year with its fields ("… income &amp; home value {y1} · population &amp; households {y2} …").
+
+### Radius → the ring map
+
+The `mapImageUrl` from the MEDHINC call: a 1120×560 JPG of block-group median household income in a five-class blue ramp, pin at the centre, rings **1 mi orange · 3 mi blue · 5 mi purple**, legend baked top-right (box starts at x ≈ 885), attribution bottom-right. It takes no colour or classification parameters; use it as returned. `custom_map_screenshot` and `map_screenshot` do not draw rings, so never substitute them.
+
+- **Crop:** the default `.mapwrap` slot (aspect 1.8 / 1) holding `<img class="mapimg ring">` at `width:150%`, shifted `left:-16.7%` and centred vertically (CSS below). The panel shows raw x ≈ 125–872, y ≈ 72–487: the baked legend and the attribution fall outside, the pin and the 1-mile ring (and in most markets the 3-mile ring) stay in frame. Never reduce the zoom or the shift.
+- **HTML legend:** download the image and read the five legend rows. Write them low→high, rounded to the nearest $1k: `<${b1}k · ${b1}–{b2}k · ${b2}–{b3}k · ${b3}–{b4}k · ${b4}k+` (income is top-coded at 200,001, so the top class is always `${b4}k+`). E.g. `<= 29,577 / 29,577 - 42,675 / 42,675 - 54,319 / 54,319 - 75,323 / 75,323 - 200,001` → `<$30k · $30–43k · $43–54k · $54–75k · $75k+`. Swatches are the baked legend's colours low→high: `#F7FAFF` `#C8DAF0` `#6BAFD6` `#296FAA` `#073265` (the map's fills are semi-transparent, so areas read lighter than their swatches, as on the baked legend). If you cannot view the image, drop the legend title and row and keep the ring key.
+- **Ring key** (map phead, right): `#D8652F` 1 mi · `#2C82C9` 3 mi · `#7A6BAA` 5 mi.
+- **Errors:** transport errors retry once; a failed retry drops that field. A missing map drops the whole map panel and the bars panel fills the left column.
+
+### Radius → template
+
+Append these rules to the end of the `<style>` block (they do not touch the default page):
+
+```css
+.mapwrap .mapimg.ring{ left:-16.7%; transform:translateY(-50%); }
+.ringkey{ display:flex; gap:0.12in; align-items:center; }
+.ringkey .ri{ display:flex; align-items:center; gap:4px; font-size:6.6pt; color:var(--muted); }
+.ringkey .ri i{ width:8px; height:8px; border-radius:50%; border:2px solid; display:block; }
+.rp{ display:flex; flex-direction:column; }
+.rp .sec{ flex:1; display:flex; flex-direction:column; justify-content:center; }
+.rstats{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.06in; }
+.rs .k{ font-size:6.6pt; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--sage); }
+.rs .v{ font-family:var(--font-mono); font-weight:700; font-size:12pt; color:var(--ink); margin-top:2px; }
+```
+
+The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the default template's, verbatim, with the eyebrow text "Demographics &middot; 1 / 3 / 5 Mile Radius". Everything after the rule is this body (values are markup illustration for 511 Campbell St):
+
+```html
+  <div class="lede">Within 1 mile of <b>511 Campbell St</b> live <b>17,609</b> people in <b>9,897</b> households, with <b>82,617</b> within 3 miles and <b>221,657</b> within 5. The 1-mile median household income of <b>$67,363</b> is <b>78%</b> of the <b>$85,893</b> national median, and the 1-mile median home value of <b>$313,889</b> is <b>4.7&times;</b> that income. At 5 miles the two medians are <b>$57,822</b> and <b>$179,028</b>.</div>
+  <!-- A dropped card → class="kpis two" -->
+  <div class="kpis">
+    <div class="kpi"><div class="lbl">Median HHI &middot; 1 Mile</div>
+      <div class="val">$67,363</div><div class="sub">78% of the $85,893 U.S. median.</div></div>
+    <div class="kpi"><div class="lbl">Population &middot; 1 Mile</div>
+      <div class="val">17,609</div><div class="sub">82,617 at 3 mi &middot; 221,657 at 5 mi</div></div>
+    <div class="kpi pop"><div class="lbl">Median Home Value &middot; 1 Mile</div>
+      <div class="val">$313,889</div><div class="sub">4.7&times; the 1-mile median household income.</div></div>
+  </div>
+  <div class="grid">
+    <div class="lcol">
+      <div class="panel">
+        <div class="phead"><span class="t">Median HHI &middot; 1 / 3 / 5 Mile Rings</span><span class="ringkey"><span class="ri"><i style="border-color:#D8652F"></i>1 mi</span><span class="ri"><i style="border-color:#2C82C9"></i>3 mi</span><span class="ri"><i style="border-color:#7A6BAA"></i>5 mi</span></span></div>
+        <div class="mapwrap"><img class="mapimg ring" src="{{RING_MAP_URL}}" alt="Median household income by block group with 1, 3 and 5 mile rings"/></div>
+        <div class="legt">Median Household Income</div>
+        <!-- five .li items low→high: the service ramp in order, labels transcribed per §Maps -->
+        <div class="leg"><div class="li"><span class="sw" style="background:#F7FAFF"></span>&lt;$30k</div><div class="li"><span class="sw" style="background:#C8DAF0"></span>$30&ndash;43k</div><div class="li"><span class="sw" style="background:#6BAFD6"></span>$43&ndash;54k</div><div class="li"><span class="sw" style="background:#296FAA"></span>$54&ndash;75k</div><div class="li"><span class="sw" style="background:#073265"></span>$75k+</div></div>
+      </div>
+      <!-- bars: 1 Mile · 3 Mile · 5 Mile · {County} Co. · National; .bf width = value/max×100 (min 2.5%) -->
+      <div class="panel growth">
+        <div class="phead"><span class="t">Median HHI &middot; by Ring</span></div>
+        <div class="bars">
+          <div class="brow"><span class="bk">1 Mile</span><span class="bt"><span class="bf" style="width:78.4%"></span></span><span class="bv">$67,363</span></div>
+          <div class="brow"><span class="bk">3 Mile</span><span class="bt"><span class="bf" style="width:70.6%"></span></span><span class="bv">$60,633</span></div>
+          <div class="brow"><span class="bk">5 Mile</span><span class="bt"><span class="bf" style="width:67.3%"></span></span><span class="bv">$57,822</span></div>
+          <div class="brow"><span class="bk">Jackson Co.</span><span class="bt"><span class="bf" style="width:88.1%"></span></span><span class="bv">$75,657</span></div>
+          <div class="brow"><span class="bk">National</span><span class="bt"><span class="bf" style="width:100.0%"></span></span><span class="bv">$85,893</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- one .sec per ring; a count ≥ 1,000,000 prints as {x.xx}M -->
+    <div class="panel occ rp">
+      <div class="phead"><span class="t">Ring Profile</span></div>
+      <div class="sec">
+        <div class="sh">1 Mile</div>
+        <div class="rstats">
+          <div class="rs"><div class="k">Population</div><div class="v">17,609</div></div>
+          <div class="rs"><div class="k">Households</div><div class="v">9,897</div></div>
+          <div class="rs"><div class="k">Per sq mi</div><div class="v">5,605</div></div>
+        </div>
+        <div class="dom"><span class="d wc">Median HHI $67,363</span>
+          <span class="u">Home value $313,889</span></div>
+      </div>
+      <div class="sec">
+        <div class="sh">3 Mile</div>
+        <div class="rstats">
+          <div class="rs"><div class="k">Population</div><div class="v">82,617</div></div>
+          <div class="rs"><div class="k">Households</div><div class="v">38,392</div></div>
+          <div class="rs"><div class="k">Per sq mi</div><div class="v">2,922</div></div>
+        </div>
+        <div class="dom"><span class="d wc">Median HHI $60,633</span>
+          <span class="u">Home value $196,389</span></div>
+      </div>
+      <div class="sec">
+        <div class="sh">5 Mile</div>
+        <div class="rstats">
+          <div class="rs"><div class="k">Population</div><div class="v">221,657</div></div>
+          <div class="rs"><div class="k">Households</div><div class="v">99,414</div></div>
+          <div class="rs"><div class="k">Per sq mi</div><div class="v">2,822</div></div>
+        </div>
+        <div class="dom"><span class="d wc">Median HHI $57,822</span>
+          <span class="u">Home value $179,028</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="sumt">Radius Summary</div>
+  <!-- deltas vs the 1-mile cell on Median HHI, Median Home Value and Density only -->
+  <table class="sum">
+    <thead><tr><th>Metric</th><th>1 Mile</th><th>3 Mile</th><th>5 Mile</th></tr></thead>
+    <tbody>
+      <tr><td class="m">Median HHI</td><td class="blk">$67,363</td><td>$60,633<span class="d dn">&#9660; 10.0%</span></td><td>$57,822<span class="d dn">&#9660; 14.2%</span></td></tr>
+      <tr><td class="m">Median Home Value</td><td class="blk">$313,889</td><td>$196,389<span class="d dn">&#9660; 37.4%</span></td><td>$179,028<span class="d dn">&#9660; 43.0%</span></td></tr>
+      <tr><td class="m">Value to Income</td><td class="blk">4.7&times;</td><td>3.2&times;</td><td>3.1&times;</td></tr>
+      <tr><td class="m">Population</td><td class="blk">17,609</td><td>82,617</td><td>221,657</td></tr>
+      <tr><td class="m">Households</td><td class="blk">9,897</td><td>38,392</td><td>99,414</td></tr>
+      <tr><td class="m">Density (per sq mi)</td><td class="blk">5,605</td><td>2,922<span class="d dn">&#9660; 47.9%</span></td><td>2,822<span class="d dn">&#9660; 49.6%</span></td></tr>
+    </tbody>
+  </table>
+  <div class="ft"><span>Source: Esri GeoEnrichment 2026 &middot; 1 / 3 / 5-mile rings &middot; VestMap GIS</span><span>Generated {{Month D, YYYY}}</span></div>
+```
+
+Output `vestmap-om-radius-{zip}-{YYYYMMDD-HHMMSS}.pdf`; respond with the PDF path and one sentence naming the address and "1 / 3 / 5-mile radius". Light Print works the same way (`<body class="light">`).
+
+### Radius → coming fields
+
+The backend is adding ring fields. Each default-page element joins this variant **only once `get_radius_demographics` accepts its field**, in the default page's own markup and slot (its CSS is already in the template):
+
+| Default-page element | Ring field(s) | Slot on the radius page |
+|---|---|---|
+| Population Growth · 5-yr CAGR (bars + row) | `POPGRWCYFY` | The bars panel; Median HHI by ring moves to the table |
+| Median Age (KPI + row) | `MEDAGE_CY` | KPI 2 |
+| Renter Share (KPI + row + lede) | `RENTER_CY`, `OWNER_CY` | KPI 3 (mint pop card) |
+| Occupation Profile (white collar · blue collar · service, unemployment) | 22 `OCC*_CY`, `EMP_CY`, `UNEMPRT_CY` | Replaces the Ring Profile, one section per ring |
+| Avg HH Size (row) | `AVGHHSZ_CY` | Summary table |
+| Rent to income (lede) | `MEDCRNT_CY` | Lede |
 
 ## PDF export
 
