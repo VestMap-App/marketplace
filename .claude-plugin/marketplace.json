@@ -8,7 +8,7 @@
     {
       "name": "vestmap",
       "source": "./plugins/vestmap",
-      "description": "VestMap property data and Offering Memorandum page generation. Bundles two skills: the base vestmap data skill and the vestmap-om-pages renderer."
+      "description": "VestMap property data, Offering Memorandum and appraisal market-area page generation. Bundles three skills: the base vestmap data skill, the vestmap-om-pages renderer and the vestmap-market-area-pages appraisal insert."
     },
     {
       "name": "rental-analyzer",

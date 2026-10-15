@@ -9,6 +9,10 @@ Offering Memorandum pages, and rental-property pro formas.
   crime, schools, hazards, and market trends, answered with clear comparison tables.
 - **`vestmap-om-pages`** — Generate a presentation-ready Offering Memorandum (OM) page for any US
   address as a PDF.
+- **`vestmap-market-area-pages`** — Generate the demographic pages of a narrative appraisal report
+  (Regional and Market Area Analysis, Employment Analysis and a Demographic Data Detail addenda) for
+  any US address, styled to slot into a USPAP/FIRREA report, with the appraiser's own passages left
+  as highlighted placeholders.
 - **`rental-property-analyzer`** — Turn a rent roll + T12 + loan terms into an investor-grade pro
   forma: an editable Excel model (Current vs. Proforma, NOI, cap rate, DSCR, cash-on-cash, loan
   amortization, multi-year projection) plus a polished PDF report with a KPI dashboard and charts.
@@ -30,9 +34,10 @@ Just ask Claude naturally and the right skill activates on its own:
 
 - *"Median household income around 1600 Pennsylvania Ave NW, Washington, DC?"* → `vestmap`
 - *"Make an OM page for 1600 Pennsylvania Ave NW."* → `vestmap-om-pages`
+- *"Market area analysis pages for 1600 Pennsylvania Ave NW, multifamily."* → `vestmap-market-area-pages`
 - *"Analyze this rental — here's the rent roll and T12."* → `rental-property-analyzer`
 
-Or trigger one explicitly: `/vestmap:vestmap`, `/vestmap:vestmap-om-pages`,
+Or trigger one explicitly: `/vestmap:vestmap`, `/vestmap:vestmap-om-pages`, `/vestmap:vestmap-market-area-pages`,
 `/rental-analyzer:rental-property-analyzer`.
 
 ## Staying up to date
