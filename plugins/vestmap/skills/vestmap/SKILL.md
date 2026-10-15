@@ -26,11 +26,11 @@ For a single-address question:
 4. **Link the matching interactive map by default.** If the metric maps to one of the seven map sections (see Interactive maps), fire `show_map` in this same batch and surface the link. If it maps to none, make no map call.
 5. **Offer the rings.** When the question is about a site, deal, OM or trade area, close with one line: "The same data is available at 1 / 3 / 5-mile rings — want those?" When the user asked for 1 / 3 / 5 miles, a radius or rings, present the ring table instead (see Presentation).
 
-Every `get_radius_demographics` call also renders a ring map (`mapImageUrl`, about 30 seconds). It belongs to a ring answer: link it only when the reply shows ring values, and pass `shadeField` set to the field the user cares about (keep it in `fieldNames` too, so the map matches the numbers).
+Every `get_radius_demographics` call also renders a ring map (`mapImageUrl`, about 30 seconds). It belongs to a ring answer: link it only when the reply shows ring values, and pass `shadeField` set to the field the user cares about (keep it in `fieldNames` too, so the map matches the numbers). A null `mapImageUrl` with a `mapError` is a render failure; when the answer needs the map, repeat the identical call once, and if it fails again ship the table without it.
 
 **Never use `query_gis_field` for Esri demographics.** The `USA_Demographics_and_Boundaries_*` and `USA_Crime_*` layers it reads are the older 2024 vintage, one scale per call. It stays for the non-Esri layers in §Other sources and for boundary names (a county's `NAME`).
 
-**`get_section_data`** sections `income`, `expansion` and `crime` read the same 2026 GeoEnrichment and are fine for a one-section question; an answer that spans sections is one `get_radius_demographics` call. If a section's text comes back empty, read the JSON block beneath it (the crime section carries `CRMCYTOTC`, `CRMCYPERC` and the other crime indexes at the block group there). A section that returns nothing is omitted, not retried.
+**`get_section_data`** sections `income`, `expansion` and `crime` read the same 2026 GeoEnrichment and are fine for a one-section question (`crime` returns the block group's ten indexes); an answer that spans sections is one `get_radius_demographics` call. The `hpi` and `neighborhood` sections are not connected: never call them. A section that returns nothing is omitted, not retried.
 
 **Older connector.** If `get_radius_demographics` takes only a single `fieldName` (no `fieldNames` or `shadeField`), or the call rejects `fieldNames`, tell the user once: "This needs the latest VestMap connector. Install it from app.vestmap.com/mcp, then ask again."
 
@@ -49,7 +49,7 @@ All 2026 Esri GeoEnrichment, available at Block Group, Tract, ZIP, County, State
 | Income brackets | `income_under_50k_pct` · `income_50k_100k_pct` · `income_100k_150k_pct` · `income_150k_plus_pct` |
 | Education | `bachelors_plus_pct` (adults 25+) |
 | Workforce | `white_collar_pct` · `blue_collar_pct` · `services_pct` (shares of employed, sum to 100) · `UNEMPRT_CY` (%) · `EMP_CY` |
-| Crime (index, 100 = national) | `CRMCYTOTC` total · `CRMCYPERC` personal · `CRMCYPROC` property · `CRMCYMURD` · `CRMCYRAPE` · `CRMCYROBB` · `CRMCYASST` · `CRMCYBURG` · `CRMCYLARC` |
+| Crime (index, 100 = national) | `CRMCYTOTC` total · `CRMCYPERC` personal · `CRMCYPROC` property · `CRMCYMURD` · `CRMCYRAPE` · `CRMCYROBB` · `CRMCYASST` · `CRMCYBURG` · `CRMCYLARC` · `CRMCYMVEH` (motor vehicle theft) |
 | Businesses | `N01_BUS` businesses · `N01_EMP` employees (NAICS totals) |
 
 The lowercase codes are derived metrics the connector computes at every scale and ring; their values are already percentages. Any other Esri code works the same way. An unknown code makes the call fail with a message naming it: search for the right code, never guess one.
@@ -60,7 +60,8 @@ These are not Esri demographics and keep their own tools:
 
 - **FEMA NRI hazards** — Tract only: `query_gis_field` on `National_Risk_Index_Census_Tracts/FeatureServer/0` (find the field with `search_real_estate_data("flood risk")` and similar).
 - **Schools** — `get_section_data(address, "schools")`.
-- **Home price index (FHFA)** — `get_section_data(address, "hpi")`.
+
+Home values come from `MEDVAL_CY` (§Field codes). VestMap has no current home price index or appreciation series: if the user asks for appreciation, say so in one line and give `MEDVAL_CY` instead.
 
 ## Interactive maps
 
