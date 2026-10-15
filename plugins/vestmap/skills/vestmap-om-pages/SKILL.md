@@ -423,170 +423,173 @@ two files' fill colours.
 | "light", "print", "light theme" | **Light Print** | `<body class="light">`. Nothing else changes. |
 | "rental page", "rental market page", "add the rental page" | **Rental Market page** | Same skeleton, eyebrow "Rental Market". KPIs: Median Rent · Block (sub "{block/national}% of the ${national} national median."), Renter Share · Block (the mint pop card, same as default), Rent to Income · Block (sub "{comparator} the 30% burden standard."). Map panel: phead "Median Rent · Block Groups" / "2024 ACS estimate", `{{RENT_MAP_URL}}`, legend title "Median Contract Rent" with the rent labels transcribed per §Maps. Growth panel becomes "Renter Share · by Scale" bars (renter share ×5 scales, 1dp, unsigned). Occupation panel becomes "Tenure Profile": per scale (Block · Tract · ZIP) rings Renter (green) · Owner (blue) · Rent to Income (green below 30%, clay at ≥30%), dominant line "▶ Renter" / "▶ Owner" and "Median rent: ${MEDCRNT_CY} · {TOTHH_CY} HH". Summary rows: Median Rent · Renter Share ("x.x pt") · Rent to Income ("x.x pt") · Median HHI · Pop Growth (CAGR). Output as its own page after the default page, or standalone if asked alone. |
 | "ask(ing) rent $X" | Ask override | Lede per §Computations. |
-| "1/3/5", "1, 3 and 5 miles", "radius", "rings" | **Radius (1 / 3 / 5 mile)** | Its own data, map and body: see §Radius variant. Only ring data on the page; never Block / Tract / ZIP values. |
+| "1/3/5", "1, 3 and 5 miles", "radius", "rings" | **Radius (1 / 3 / 5 mile)** | The default page at 1 / 3 / 5 miles, with County and National as references: see §Radius variant. Ring data only; never Block / Tract / ZIP values. |
 | any other data/module ask | Custom | Extra summary-table rows for tabular asks; an extra dashboard page (Rental-variant pattern) plus a §Custom-maps map for mappable asks. |
 
 ## Radius variant (1 / 3 / 5 mile)
 
-**Block / Tract / ZIP is the default.** Build this variant only when the user asks for it: "1/3/5", "1, 3 and 5 miles", "radius", "rings", "ring demographics", "radius OM". It is the same one-page Demographics dashboard, same brand, same masthead, same PDF pipeline, with the scales changed to **1 Mile / 3 Mile / 5 Mile**. Everything in the sections above applies except where this section differs, and where they differ this section wins: the eyebrow, the lede (≤3 lines here), the data calls, the map and its legend, the body, and the file name.
+**Block / Tract / ZIP is the default.** Build this variant only when the user asks for it: "1/3/5", "1, 3 and 5 miles", "radius", "rings", "ring demographics", "radius OM". It is the default Demographics dashboard with the scales changed: **1 Mile / 3 Mile / 5 Mile** take the place of Block / Tract / ZIP everywhere on the page, and County and National stay as the reference scales. Same brand, masthead, panels, sentence patterns, sweep rules and PDF pipeline. Everything in the sections above applies except where this section differs, and where they differ this section wins: the eyebrow, the data calls, the map and its crop, the lede wording, and the file name.
 
-**What it carries: only ring data.**
-- The scales on this page are 1 Mile, 3 Mile and 5 Mile, nothing else. Never put a Block, Tract or ZIP value on it, and never fill a ring gap with one. The only non-ring figures are the county and national median HHI that `get_radius_demographics` returns as references (the bars panel, KPI 1's subtext and the lede).
-- A metric with no ring data is left off the page. The radius tool carries four fields today (median HHI, median home value, population, households), so the default page's Median Age, Renter Share, Occupation Profile, Population Growth and Avg HH Size do not appear; §Radius → Coming fields says where each goes once it is added. Do not probe for other fields.
+**What it carries: only ring data, with County and National as references.**
+- Every figure is a 1-, 3- or 5-mile ring value from `get_radius_demographics`, or the County / National value the same call returns for the same field. Never put a Block, Tract, ZIP or State value on the page, and never fill a ring gap with one.
 - The rings are fixed at 1, 3 and 5 miles. If the user asks for other radii, say once that the rings are 1 / 3 / 5 miles and produce this page.
 - The base `vestmap` skill's chat defaults (search first, `show_map` links, absolute-plus-percent deltas, field-name citations) do not apply to this page.
 
-### Radius → data (replaces Workflow step 2; all five calls in parallel)
+### Radius → data (replaces Workflow step 2; both calls in parallel)
 
-- `get_radius_demographics(address, "MEDHINC_CY")` → `radius."1"/"3"/"5"` median HHI; `blockTractZip.county` and `.national` (the two references); `mapImageUrl` = **the page map**; `radiusVintage`.
-- `get_radius_demographics(address, "MEDVAL_CY")` → ring median home value.
-- `get_radius_demographics(address, "TOTPOP_CY")` → ring population.
-- `get_radius_demographics(address, "TOTHH_CY")` → ring households.
-- `query_gis_field(address, <County /7>, ["NAME"])` → county name (context line; the bar label "{County} Co.").
+- One `get_radius_demographics` call carries every figure and the map:
 
-Each ring value is `{available, value}`; `available: false` or null drops that cell. Use only the `radius` values plus the MEDHINC `county` and `national`; ignore every other `blockTractZip` value (Block / Tract / ZIP, and `state`) and the maps the other three calls return. The tool's reply says to present its map as a link rather than inline: that is chat guidance, and on this page the map is an `<img>` like any hosted JPG. Population and households are ring totals (the 3-mile ring contains the 1-mile ring).
+  ```
+  address:    <the subject address>
+  fieldNames: ["MEDHINC_CY","MEDAGE_CY","RENTER_CY","OWNER_CY","TOTHH_CY","POPGRWCYFY","AVGHHSZ_CY",
+               "white_collar_pct","blue_collar_pct","services_pct","UNEMPRT_CY","EMP_CY","MEDCRNT_CY"]
+  shadeField: "MEDHINC_CY"
+  ```
+
+- `query_gis_field(address, <County /7>, ["NAME"])` → county name (context line; the "{County} Co." bar label and column header).
+
+Read each field from `fields.<code>`. `radius."1"` / `"3"` / `"5"` are `{available, value}`; `available: false` or a null value drops that cell, bar or ring per the default sweep rules. `blockTractZip.county` and `.national` are the references; ignore `.block`, `.tract`, `.zip` and `.state`. `mapImageUrl` is the page map. The tool's reply says to present its map as a link rather than inline: that is chat guidance, and on this page the map is an `<img>` like any hosted JPG.
+
+| Default-page element | Radius field(s) |
+|---|---|
+| Median HHI (KPI 1, map, table row, lede) | `MEDHINC_CY` |
+| Median Age (KPI 2, table row, lede) | `MEDAGE_CY` |
+| Renter Share (KPI 3, table row, lede) | `RENTER_CY`, `OWNER_CY`, `TOTHH_CY`, with the §Computations formula |
+| Population Growth (bars, table row, lede) | `POPGRWCYFY`, the same annual 5-yr rate the expansion section returns |
+| Avg HH Size (table row) | `AVGHHSZ_CY` |
+| Occupation Profile rings | `white_collar_pct`, `blue_collar_pct`, `services_pct`. These are the connector's own shares, already in percent and built from the same 22 occupation groups as §Computations (they equal the 22-field sums exactly), so never request or re-sum the `OCC*_CY` fields for this page |
+| Occupation dominant line | `UNEMPRT_CY`, `EMP_CY` |
+| Lede rent-to-income | `MEDCRNT_CY` (1-mile ring) |
+
+If the call is rejected because `fieldNames` or `shadeField` is unknown, the user is on an older VestMap connector with four ring fields. Tell them once that the 1 / 3 / 5-mile page needs the current VestMap connector, and stop.
 
 ### Radius → computations
 
+§Computations applies with **1 Mile in the Block role**: the KPIs, the table deltas and the lede measure against the 1-mile ring the way the default page measures against the block.
+
 - **Compute from unrounded values; round only when printing**, half up.
-- **Density** (per sq mi) = ring population / (π × r²), r = 1, 3, 5 miles; whole number.
-- **Value to income** = ring median home value / ring median HHI, "{x.x}×".
-- **Share of national** = 1-mile HHI / national HHI × 100, whole %.
-- **National reference gate:** use the county and national HHI only when the MEDHINC response's `blockTractZipVintage` equals its `radiusVintage`. Otherwise drop the County and National bars, KPI 1's sub becomes "${hhi3} at 3 mi · ${hhi5} at 5 mi", and the lede's second sentence becomes "Inside that mile the median household income is **${hhi1}**, and the median home value of **${val1}** is **{vti1}×** that income."
-- **KPI subtexts** (each one line; a population or household count ≥ 1,000,000 prints as "{x.xx}M" in a subtext or Ring Profile stat, and in full in the lede and the table; currency always prints in full):
-  - `MEDIAN HHI · 1 MILE`: "{share}% of the ${national} U.S. median."
-  - `POPULATION · 1 MILE`: "{pop3} at 3 mi · {pop5} at 5 mi"
-  - `MEDIAN HOME VALUE · 1 MILE` (mint pop card): "{vti1}× the median household income within 1 mile."
-- **Lede** (≤3 rendered lines; if it runs to a 4th, drop the last sentence): "Within 1 mile of **{street line}** live **{pop1}** people in **{hh1}** households, with **{pop3}** within 3 miles and **{pop5}** within 5. Inside that mile the median household income of **${hhi1}** is **{share}%** of the **${national}** national median, and the median home value of **${val1}** is **{vti1}×** that income. At 5 miles the two medians are **${hhi5}** and **${val5}**." (Avoid writing "1-mile" in prose: the page's tabular figures space the hyphen apart.)
-- **Bars** "Median HHI · by Ring": 1 Mile · 3 Mile · 5 Mile · {County} Co. · National; width = value / max × 100 (min 2.5%, 1dp).
-- **Ring Profile** (the occupation panel's slot): one section per ring with Population · Households · Per sq mi, then "Median HHI ${hhi}" and "Home value ${val}".
-- **Summary table** "Radius Summary": rows Median HHI · Median Home Value · Value to Income · Population · Households · Density (per sq mi); columns 1 Mile · 3 Mile · 5 Mile. On the Median HHI, Median Home Value and Density rows, the 3- and 5-mile cells carry a stacked delta against the 1-mile cell (▲ `up` / ▼ `dn`, `|cell − 1-mile| / 1-mile × 100` as "{x.x}%"). No delta when a cell equals the 1-mile cell. Population, Households and Value to Income carry none.
-- **Source line:** "Source: Esri GeoEnrichment {radiusVintage} · 1 / 3 / 5-mile rings · VestMap GIS". If the four calls report different `radiusVintage`s, name each year with its fields ("… income &amp; home value {y1} · population &amp; households {y2} …").
+- **Reference gate:** use the County and National values only when `blockTractZipVintage` equals `radiusVintage`. Otherwise drop the County and National columns and bars, the KPI subs become "{3-mile} at 3 mi · {5-mile} at 5 mi" (HHI as currency, age 1dp, renter share 1dp with %), and the lede's growth sentence ends at "…a year."
+- **KPIs:** `MEDIAN HHI · 1 MILE`, `MEDIAN AGE · 1 MILE`, `RENTER SHARE · 1 MILE` (the mint pop card), each with the default sub pattern and the 1-mile value in the block's place, except that KPI 1 says "U.S." where the default says "national": "{share}% of the ${national} U.S. median." A ring above the national median prints a three-digit share, and the longer wording would wrap to a second line and push the panels over the summary title.
+- **Lede** (≤4 rendered lines; omit any fragment whose inputs are null): "The 1 mile radius around **{street line}** is **{renter share}% renters** with a median age of **{age}**, with **{wc}%** of the employed population working white-collar jobs. The median household income inside that mile of **${HHI}** means its **${rent}** median contract rent is **{rti}%** of gross income {comparator} the 30% of gross income rent burden standard. The 1 mile radius is growing **+{growth}%** a year — **{ratio}×** the national rate." The shrinking and national ≤ 0 forms and the ask-rent override follow §Computations with "The 1 mile radius" as the subject. Write "1 mile" without a hyphen in prose: the page's tabular figures space the hyphen apart.
+- **Occupation Profile:** one section per ring (1 Mile · 3 Mile · 5 Mile). Rings print the three shares as whole percents (half up) and draw their arcs from the unrounded shares, the lede prints white collar at 1dp, and the dominant class and ties follow §Computations. The dominant line reads "Unemployment: {UNEMPRT_CY}% · {employed} employed", and because ring counts run long, `EMP_CY` prints in full below 100,000, as whole thousands from 100,000 (119,362 → "119k", half up) and as "{x.xx}M" from 1,000,000. That keeps the line on one row, which the page height needs.
+- **Summary table** "Radius Summary": the default rows (Median HHI · Median Age · Renter Share · Pop Growth (CAGR) · Avg HH Size) with columns 1 Mile · 3 Mile · 5 Mile · {County} Co. · National. Every non-1-mile cell carries the default delta line against the 1-mile cell.
+- **Source line:** "Source: Esri GeoEnrichment {radiusVintage} · 1 / 3 / 5-mile rings · VestMap GIS". The map phead reads "Median HHI · 1 / 3 / 5 Mile Rings", with "{radiusVintage} GeoEnrichment estimate" on the right.
 
 ### Radius → the ring map
 
-The `mapImageUrl` from the MEDHINC call: a 1120×560 JPG of block-group median household income in a five-class blue ramp, pin at the centre, rings **1 mi orange · 3 mi blue · 5 mi purple**, legend baked top-right (box starts at x ≈ 885), attribution bottom-right. It takes no colour or classification parameters; use it as returned. `custom_map_screenshot` and `map_screenshot` do not draw rings, so never substitute them.
+The call's `mapImageUrl` is a 1120×560 JPG of block-group median household income in a five-class blue ramp, with the pin at the centre and rings **1 mi orange · 3 mi blue · 5 mi purple**. It has a baked legend titled "{year} Median Household Income (Esri GeoEnrichment)" in a box spanning x ≈ 678–1105, y ≈ 15–161, and attribution along the bottom right (y > 527). `shadeField` is always `MEDHINC_CY`, so the legend box keeps that size in every market. The map takes no colour or classification parameters; use it as returned. `custom_map_screenshot` and `map_screenshot` do not draw rings, so never substitute them.
 
-- **Crop:** the default `.mapwrap` slot (aspect 1.8 / 1) holding `<img class="mapimg ring">` at `width:150%`, shifted `left:-16.7%` and centred vertically (CSS below). The panel shows raw x ≈ 125–872, y ≈ 72–487: the baked legend and the attribution fall outside, the pin and the 1-mile ring (and in most markets the 3-mile ring) stay in frame. Never reduce the zoom or the shift.
-- **HTML legend:** download the image and read the five legend rows. Write them low→high, rounded to the nearest $1k: `<${b1}k · ${b1}–{b2}k · ${b2}–{b3}k · ${b3}–{b4}k · ${b4}k+` (income is top-coded at 200,001, so the top class is always `${b4}k+`). E.g. `<= 29,577 / 29,577 - 42,675 / 42,675 - 54,319 / 54,319 - 75,323 / 75,323 - 200,001` → `<$30k · $30–43k · $43–54k · $54–75k · $75k+`. Swatches are the baked legend's colours low→high: `#F7FAFF` `#C8DAF0` `#6BAFD6` `#296FAA` `#073265` (the map's fills are semi-transparent, so areas read lighter than their swatches, as on the baked legend). If you cannot view the image, drop the legend title and row and keep the ring key. The default §Maps degenerate check and its `equal-interval` fallback do not apply: the ring map takes no classification parameters, so transcribe its legend as returned.
-- **Ring key** (map phead, right): `#D8652F` 1 mi · `#2C82C9` 3 mi · `#7A6BAA` 5 mi.
-- **Errors:** transport errors retry once; a failed retry drops that field. A missing map drops the whole map panel and the bars panel fills the left column.
+- **Crop:** the default `.mapwrap` slot (aspect 1.8 / 1) holding `<img class="mapimg ring">` at `width:160%`, centred like the default map. The panel shows raw x ≈ 210–910, y ≈ 85–475: pin dead centre, the 1-mile ring and in most markets the 3-mile ring in frame, attribution outside. The baked legend's lower-left corner still falls in the frame's top right. The **ring card** (`.rcard`, top right, 35% × 22% of the frame) covers it and carries the ring key. Never shrink the card, reduce the zoom or shift the image.
+- **HTML legend:** download the image and read the five legend rows. Write them low→high, rounded to the nearest $1k: `<${b1}k · ${b1}–{b2}k · ${b2}–{b3}k · ${b3}–{b4}k · ${b4}k+`. E.g. `<= 35,000 / 35,000 - 51,184 / 51,184 - 63,320 / 63,320 - 81,546 / 81,546 - 209,673` → `<$35k · $35–51k · $51–63k · $63–82k · $82k+`. Swatches are the baked legend's colours low→high: `#F7FAFF` `#C8DAF0` `#6BAFD6` `#296FAA` `#073265` (the map's fills are semi-transparent, so areas read lighter than their swatches, as on the baked legend). If you cannot view the image, drop the legend title and row and keep the ring card. The default §Maps degenerate check and its `equal-interval` fallback do not apply: the ring map takes no classification parameters, so transcribe its legend as returned.
+- **Ring card colours:** `#D8652F` 1 mile · `#2C82C9` 3 miles · `#7A6BAA` 5 miles.
+- **Errors:** a transport error retries once. A missing map drops the map panel and the growth panel fills the left column. If the data call still fails after its retry, there is no page: say so once.
 
 ### Radius → template
 
 Append these rules to the end of the `<style>` block (they do not touch the default page):
 
 ```css
-.mapwrap .mapimg.ring{ left:-16.7%; transform:translateY(-50%); }
-.ringkey{ display:flex; gap:0.12in; align-items:center; }
-.ringkey .ri{ display:flex; align-items:center; gap:4px; font-size:6.6pt; color:var(--muted); }
-.ringkey .ri i{ width:8px; height:8px; border-radius:50%; border:2px solid; display:block; }
-.rp{ display:flex; flex-direction:column; }
-.rp .sec{ flex:1; display:flex; flex-direction:column; justify-content:center; }
-.rstats{ display:grid; grid-template-columns:repeat(3,1fr); gap:0.06in; }
-.rs .k{ font-size:6.6pt; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--sage); }
-.rs .v{ font-family:var(--font-mono); font-weight:700; font-size:12pt; color:var(--ink); margin-top:2px; }
+.mapwrap .mapimg.ring{ width:160%; }
+.mapwrap .rcard{ position:absolute; top:0; right:0; width:35%; height:22%;
+  background:var(--panel); border-left:1px solid var(--hair); border-bottom:1px solid var(--hair);
+  border-bottom-left-radius:8px; display:flex; flex-direction:column; justify-content:center;
+  gap:3px; padding:0 0.10in; }
+.rcard .ri{ display:flex; align-items:center; gap:5px; font-size:6.6pt; color:var(--muted); }
+.rcard .ri i{ width:8px; height:8px; border-radius:50%; border:2px solid; display:block; flex:none; }
+/* the dominant label never breaks; a long unemployment line wraps right-aligned */
+.occ .dom .d{ white-space:nowrap; }
+.occ .dom .u{ text-align:right; }
 ```
 
-The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the default template's, verbatim, with the eyebrow text "Demographics &middot; 1 / 3 / 5 Mile Radius". Everything after the rule is this body (values are markup illustration for 511 Campbell St):
+The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the default template's, verbatim, with the eyebrow text "Demographics &middot; 1 / 3 / 5 Mile Radius". Everything after the rule is the default body with these values and labels (markup illustration for 511 Campbell St):
 
 ```html
-  <div class="lede">Within 1 mile of <b>511 Campbell St</b> live <b>17,609</b> people in <b>9,897</b> households, with <b>82,617</b> within 3 miles and <b>221,657</b> within 5. Inside that mile the median household income of <b>$67,363</b> is <b>78%</b> of the <b>$85,893</b> national median, and the median home value of <b>$313,889</b> is <b>4.7&times;</b> that income. At 5 miles the two medians are <b>$57,822</b> and <b>$179,028</b>.</div>
-  <!-- A dropped card → class="kpis two" -->
+  <div class="lede">The 1 mile radius around <b>511 Campbell St</b> is <b>87.6% renters</b> with a median age of <b>31.6</b>, with <b>75.5%</b> of the employed population working white-collar jobs. The median household income inside that mile of <b>$67,370</b> means its <b>$1,446</b> median contract rent is <b>25.8%</b> of gross income lower than the 30% of gross income rent burden standard. The 1 mile radius is growing <b>+2.79%</b> a year — <b>5.8&times;</b> the national rate.</div>
+
   <div class="kpis">
     <div class="kpi"><div class="lbl">Median HHI &middot; 1 Mile</div>
-      <div class="val">$67,363</div><div class="sub">78% of the $85,893 U.S. median.</div></div>
-    <div class="kpi"><div class="lbl">Population &middot; 1 Mile</div>
-      <div class="val">17,609</div><div class="sub">82,617 at 3 mi &middot; 221,657 at 5 mi</div></div>
-    <div class="kpi pop"><div class="lbl">Median Home Value &middot; 1 Mile</div>
-      <div class="val">$313,889</div><div class="sub">4.7&times; the median household income within 1 mile.</div></div>
+      <div class="val">$67,370</div><div class="sub">78% of the $85,893 U.S. median.</div></div>
+    <div class="kpi"><div class="lbl">Median Age &middot; 1 Mile</div>
+      <div class="val">31.6</div><div class="sub">8.0 years under the national 39.6.</div></div>
+    <div class="kpi pop"><div class="lbl">Renter Share &middot; 1 Mile</div>
+      <div class="val">87.6%</div><div class="sub">8,669 of 9,899 HH &middot; Nationally 36.0%</div></div>
   </div>
+
   <div class="grid">
     <div class="lcol">
       <div class="panel">
-        <div class="phead"><span class="t">Median HHI &middot; 1 / 3 / 5 Mile Rings</span><span class="ringkey"><span class="ri"><i style="border-color:#D8652F"></i>1 mi</span><span class="ri"><i style="border-color:#2C82C9"></i>3 mi</span><span class="ri"><i style="border-color:#7A6BAA"></i>5 mi</span></span></div>
-        <div class="mapwrap"><img class="mapimg ring" src="{{RING_MAP_URL}}" alt="Median household income by block group with 1, 3 and 5 mile rings"/></div>
+        <div class="phead"><span class="t">Median HHI &middot; 1 / 3 / 5 Mile Rings</span><span class="r">2026 GeoEnrichment estimate</span></div>
+        <div class="mapwrap"><img class="mapimg ring" src="{{RING_MAP_URL}}" alt="Median household income by block group with 1, 3 and 5 mile rings"/>
+          <div class="rcard"><span class="ri"><i style="border-color:#D8652F"></i>1 mile</span><span class="ri"><i style="border-color:#2C82C9"></i>3 miles</span><span class="ri"><i style="border-color:#7A6BAA"></i>5 miles</span></div></div>
         <div class="legt">Median Household Income</div>
         <!-- five .li items low→high: the baked legend's swatches in order, labels transcribed per §Radius → the ring map -->
-        <div class="leg"><div class="li"><span class="sw" style="background:#F7FAFF"></span>&lt;$30k</div><div class="li"><span class="sw" style="background:#C8DAF0"></span>$30&ndash;43k</div><div class="li"><span class="sw" style="background:#6BAFD6"></span>$43&ndash;54k</div><div class="li"><span class="sw" style="background:#296FAA"></span>$54&ndash;75k</div><div class="li"><span class="sw" style="background:#073265"></span>$75k+</div></div>
+        <div class="leg">
+          <div class="li"><span class="sw" style="background:#F7FAFF"></span>&lt;$35k</div>
+          <div class="li"><span class="sw" style="background:#C8DAF0"></span>$35&ndash;51k</div>
+          <div class="li"><span class="sw" style="background:#6BAFD6"></span>$51&ndash;63k</div>
+          <div class="li"><span class="sw" style="background:#296FAA"></span>$63&ndash;82k</div>
+          <div class="li"><span class="sw" style="background:#073265"></span>$82k+</div>
+        </div>
       </div>
-      <!-- bars: 1 Mile · 3 Mile · 5 Mile · {County} Co. · National; .bf width = value/max×100 (min 2.5%) -->
       <div class="panel growth">
-        <div class="phead"><span class="t">Median HHI &middot; by Ring</span></div>
+        <div class="phead"><span class="t">Population Growth &middot; 5-yr CAGR</span></div>
         <div class="bars">
-          <div class="brow"><span class="bk">1 Mile</span><span class="bt"><span class="bf" style="width:78.4%"></span></span><span class="bv">$67,363</span></div>
-          <div class="brow"><span class="bk">3 Mile</span><span class="bt"><span class="bf" style="width:70.6%"></span></span><span class="bv">$60,633</span></div>
-          <div class="brow"><span class="bk">5 Mile</span><span class="bt"><span class="bf" style="width:67.3%"></span></span><span class="bv">$57,822</span></div>
-          <div class="brow"><span class="bk">Jackson Co.</span><span class="bt"><span class="bf" style="width:88.1%"></span></span><span class="bv">$75,657</span></div>
-          <div class="brow"><span class="bk">National</span><span class="bt"><span class="bf" style="width:100.0%"></span></span><span class="bv">$85,893</span></div>
+          <!-- 1 Mile · 3 Mile · 5 Mile · {County} Co. · National; widths and labels per the default growth panel -->
+          <div class="brow"><span class="bk">1 Mile</span><span class="bt"><span class="bf" style="width:100.0%"></span></span><span class="bv">+2.79%</span></div>
+          <div class="brow"><span class="bk">3 Mile</span><span class="bt"><span class="bf" style="width:44.8%"></span></span><span class="bv">+1.25%</span></div>
+          <div class="brow"><span class="bk">5 Mile</span><span class="bt"><span class="bf" style="width:22.9%"></span></span><span class="bv">+0.64%</span></div>
+          <div class="brow"><span class="bk">Jackson Co.</span><span class="bt"><span class="bf" style="width:10.4%"></span></span><span class="bv">+0.29%</span></div>
+          <div class="brow"><span class="bk">National</span><span class="bt"><span class="bf" style="width:17.2%"></span></span><span class="bv">+0.48%</span></div>
         </div>
       </div>
     </div>
-    <!-- one .sec per ring; a count ≥ 1,000,000 prints as {x.xx}M -->
-    <div class="panel occ rp">
-      <div class="phead"><span class="t">Ring Profile</span></div>
+    <div class="panel occ">
+      <div class="phead"><span class="t">Occupation Profile</span></div>
+      <!-- three .sec blocks: 1 Mile · 3 Mile · 5 Mile; ring markup exactly as the default template -->
       <div class="sec">
         <div class="sh">1 Mile</div>
-        <div class="rstats">
-          <div class="rs"><div class="k">Population</div><div class="v">17,609</div></div>
-          <div class="rs"><div class="k">Households</div><div class="v">9,897</div></div>
-          <div class="rs"><div class="k">Per sq mi</div><div class="v">5,605</div></div>
+        <div class="rings">
+          <div class="rg"><svg width="52" height="52" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="25" fill="none" stroke="var(--track)" stroke-width="5.5"/>
+              <circle cx="32" cy="32" r="25" fill="none" stroke="var(--green)" stroke-width="5.5" stroke-linecap="round"
+                stroke-dasharray="118.6 157.1" transform="rotate(-90 32 32)"/>
+              <text class="pct" x="32" y="32" text-anchor="middle" dominant-baseline="central">76%</text></svg>
+            <div class="rk">White<br/>Collar</div></div>
+          <!-- ring 2: var(--blue), "Blue<br/>Collar" · ring 3: var(--clay), "Service" -->
         </div>
-        <div class="dom"><span class="d wc">Median HHI $67,363</span>
-          <span class="u">Home value $313,889</span></div>
+        <div class="dom"><span class="d wc">&#9654; White Collar</span>
+          <span class="u">Unemployment: 3.8% &middot; 11,301 employed</span></div>
       </div>
-      <div class="sec">
-        <div class="sh">3 Mile</div>
-        <div class="rstats">
-          <div class="rs"><div class="k">Population</div><div class="v">82,617</div></div>
-          <div class="rs"><div class="k">Households</div><div class="v">38,392</div></div>
-          <div class="rs"><div class="k">Per sq mi</div><div class="v">2,922</div></div>
-        </div>
-        <div class="dom"><span class="d wc">Median HHI $60,633</span>
-          <span class="u">Home value $196,389</span></div>
-      </div>
-      <div class="sec">
-        <div class="sh">5 Mile</div>
-        <div class="rstats">
-          <div class="rs"><div class="k">Population</div><div class="v">221,657</div></div>
-          <div class="rs"><div class="k">Households</div><div class="v">99,414</div></div>
-          <div class="rs"><div class="k">Per sq mi</div><div class="v">2,822</div></div>
-        </div>
-        <div class="dom"><span class="d wc">Median HHI $57,822</span>
-          <span class="u">Home value $179,028</span></div>
-      </div>
+      <!-- .sec "3 Mile" … · .sec "5 Mile" … -->
     </div>
   </div>
+
   <div class="sumt">Radius Summary</div>
-  <!-- deltas vs the 1-mile cell on Median HHI, Median Home Value and Density only -->
   <table class="sum">
-    <thead><tr><th>Metric</th><th>1 Mile</th><th>3 Mile</th><th>5 Mile</th></tr></thead>
+    <thead><tr><th>Metric</th><th>1 Mile</th><th>3 Mile</th><th>5 Mile</th><th>Jackson Co.</th><th>National</th></tr></thead>
     <tbody>
-      <tr><td class="m">Median HHI</td><td class="blk">$67,363</td><td>$60,633<span class="d dn">&#9660; 10.0%</span></td><td>$57,822<span class="d dn">&#9660; 14.2%</span></td></tr>
-      <tr><td class="m">Median Home Value</td><td class="blk">$313,889</td><td>$196,389<span class="d dn">&#9660; 37.4%</span></td><td>$179,028<span class="d dn">&#9660; 43.0%</span></td></tr>
-      <tr><td class="m">Value to Income</td><td class="blk">4.7&times;</td><td>3.2&times;</td><td>3.1&times;</td></tr>
-      <tr><td class="m">Population</td><td class="blk">17,609</td><td>82,617</td><td>221,657</td></tr>
-      <tr><td class="m">Households</td><td class="blk">9,897</td><td>38,392</td><td>99,414</td></tr>
-      <tr><td class="m">Density (per sq mi)</td><td class="blk">5,605</td><td>2,922<span class="d dn">&#9660; 47.9%</span></td><td>2,822<span class="d dn">&#9660; 49.6%</span></td></tr>
+      <tr><td class="m">Median HHI</td><td class="blk">$67,370</td>
+        <td>$60,633<span class="d dn">&#9660; 10.0%</span></td><td>$57,822<span class="d dn">&#9660; 14.2%</span></td>
+        <td>$75,657<span class="d up">&#9650; 12.3%</span></td><td class="nat">$85,893<span class="d up">&#9650; 27.5%</span></td></tr>
+      <tr><td class="m">Median Age</td><td class="blk">31.6</td>
+        <td>33.7<span class="d up">&#9650; 2.1 yr</span></td><td>34.1<span class="d up">&#9650; 2.5 yr</span></td>
+        <td>38.0<span class="d up">&#9650; 6.4 yr</span></td><td class="nat">39.6<span class="d up">&#9650; 8.0 yr</span></td></tr>
+      <tr><td class="m">Renter Share</td><td class="blk">87.6%</td>
+        <td>73.1%<span class="d dn">&#9660; 14.5 pt</span></td><td>64.1%<span class="d dn">&#9660; 23.5 pt</span></td>
+        <td>43.5%<span class="d dn">&#9660; 44.1 pt</span></td><td class="nat">36.0%<span class="d dn">&#9660; 51.6 pt</span></td></tr>
+      <tr><td class="m">Pop Growth (CAGR)</td><td class="blk">+2.79%</td>
+        <td>+1.25%<span class="d dn">&#9660; 1.54 pt</span></td><td>+0.64%<span class="d dn">&#9660; 2.15 pt</span></td>
+        <td>+0.29%<span class="d dn">&#9660; 2.50 pt</span></td><td class="nat">+0.48%<span class="d dn">&#9660; 2.31 pt</span></td></tr>
+      <tr><td class="m">Avg HH Size</td><td class="blk">1.63</td>
+        <td>2.04<span class="d up">&#9650; 0.41</span></td><td>2.17<span class="d up">&#9650; 0.54</span></td>
+        <td>2.33<span class="d up">&#9650; 0.70</span></td><td class="nat">2.49<span class="d up">&#9650; 0.86</span></td></tr>
     </tbody>
   </table>
+
   <div class="ft"><span>Source: Esri GeoEnrichment 2026 &middot; 1 / 3 / 5-mile rings &middot; VestMap GIS</span><span>Generated {{Month D, YYYY}}</span></div>
 ```
 
 Name both the intermediate HTML and the PDF `vestmap-om-radius-{zip}-{YYYYMMDD-HHMMSS}` wherever Workflow step 6 and §PDF say `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}`, and keep the `<title>` as "Demographics · {address}". Respond with the PDF path and one sentence naming the address and "1 / 3 / 5-mile radius". Light Print works the same way (`<body class="light">`).
-
-### Radius → coming fields
-
-The backend is adding ring fields. Each default-page element joins this variant **only once `get_radius_demographics` accepts its field**, in the default page's own markup and slot (its CSS is already in the template):
-
-| Default-page element | Ring field(s) | Slot on the radius page |
-|---|---|---|
-| Population Growth · 5-yr CAGR (bars + row) | `POPGRWCYFY` | The bars panel; Median HHI by ring moves to the table |
-| Median Age (KPI + row) | `MEDAGE_CY` | KPI 2 |
-| Renter Share (KPI + row + lede) | `RENTER_CY`, `OWNER_CY` | KPI 3 (mint pop card) |
-| Occupation Profile (white collar · blue collar · service, unemployment) | 22 `OCC*_CY`, `EMP_CY`, `UNEMPRT_CY` | Replaces the Ring Profile, one section per ring |
-| Avg HH Size (row) | `AVGHHSZ_CY` | Summary table |
-| Rent to income (lede) | `MEDCRNT_CY` | Lede |
 
 ## PDF export
 
