@@ -115,9 +115,35 @@ These come from standard underwriting and match the source pro formas. To change
 
 This skill is fully standalone. **But** if VestMap MCP tools (`mcp__*vestmap*` / the `vestmap` skill)
 are available and the rent roll is missing market rents — or the user wants a market sanity-check —
-you may pull median rent, property-tax, and market context for the address and use them to fill the
-`market_rent` column or sanity-check assumptions. Always flag these as estimates to the user, and
-never block the build waiting on VestMap. If it's not connected, ignore this entirely.
+you may pull area rent, tax and market context for the address and use it to fill the `market_rent`
+column or sanity-check assumptions. Always flag these as estimates to the user, and never block the
+build waiting on VestMap. If it's not connected, ignore this entirely.
+
+Make **one** `get_radius_demographics` call (2026 Esri GeoEnrichment):
+
+```
+address:    <the property address>
+fieldNames: ["MEDCRNT_CY","MEDHINC_CY","MEDVAL_CY","RENTER_CY","OWNER_CY","X3007_A","POPGRWCYFY","UNEMPRT_CY"]
+shadeField: "MEDCRNT_CY"
+```
+
+Each field's `blockTractZip` holds block group / tract / ZIP / county / state / national values and
+`radius."1"` / `"3"` / `"5"` the ring values; state the `blockTractZipVintage` year with any figure you use.
+
+| Code | What it is | Use |
+|---|---|---|
+| `MEDCRNT_CY` | Median monthly contract rent, all unit sizes, excluding utilities. `3501` is Esri's top code ($3,500 or more) | Reference point for `market_rent` (block group first; tract, ZIP or 1-mile alongside) |
+| `MEDHINC_CY` | Median household income | Rent-to-income check: proforma rent × 12 / income |
+| `MEDVAL_CY` | Median home value | Context for the purchase price |
+| `RENTER_CY`, `OWNER_CY` | Renter- and owner-occupied units | Renter share = renter / (renter + owner) |
+| `X3007_A` | Average annual property taxes per household (Esri Consumer Spending, averaged over all households, renters included) | Context only, never the subject's tax line; taxes come from the T12 or the county assessor |
+| `POPGRWCYFY`, `UNEMPRT_CY` | Annual population growth 2026–2031 (%), unemployment rate (%) | Market context for income-growth and vacancy assumptions |
+
+An area median across all unit sizes is not a unit-level comp: when it fills `market_rent`, set
+`data_completeness.tier` to 2 or 3 and list "market rents from area median contract rent" in
+`data_completeness.missing`. Use only this call for area data. The connector's older
+`query_gis_field` layers are a 2024 vintage. If the tool takes only a single `fieldName`, skip the
+enrichment and build from the documents.
 
 ## Output files
 
