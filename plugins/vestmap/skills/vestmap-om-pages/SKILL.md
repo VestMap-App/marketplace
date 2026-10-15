@@ -34,7 +34,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 4. **Sweep** for empties per the hard rules.
 5. **Fill the template** in §Template (variant deltas in §Variants).
 6. **Convert to PDF** per §PDF. Output `vestmap-om-{zip}-{YYYYMMDD-HHMMSS}.pdf` in the current directory.
-7. **Respond** minimally: the PDF path + one sentence naming the address.
+7. **Respond** minimally: the PDF path + one sentence naming the address, then the one-line 1 / 3 / 5-mile offer (§Respond).
 
 ## Data — what fills each element
 
@@ -441,7 +441,7 @@ two files' fill colours.
 
   ```
   address:    <the subject address>
-  fieldNames: ["MEDHINC_CY","MEDAGE_CY","RENTER_CY","OWNER_CY","TOTHH_CY","POPGRWCYFY","AVGHHSZ_CY",
+  fieldNames: ["MEDHINC_CY","MEDAGE_CY","RENTER_CY","OWNER_CY","TOTHH_CY","TOTPOP_CY","POPGRWCYFY","AVGHHSZ_CY",
                "white_collar_pct","blue_collar_pct","services_pct","UNEMPRT_CY","EMP_CY","MEDCRNT_CY"]
   shadeField: "MEDHINC_CY"
   ```
@@ -457,11 +457,12 @@ Read each field from `fields.<code>`. `radius."1"` / `"3"` / `"5"` are `{availab
 | Renter Share (KPI 3, table row, lede) | `RENTER_CY`, `OWNER_CY`, `TOTHH_CY`, with the §Computations formula |
 | Population Growth (bars, table row, lede) | `POPGRWCYFY`, the same annual 5-yr rate the expansion section returns |
 | Avg HH Size (table row) | `AVGHHSZ_CY` |
+| Population, Households (table rows) | `TOTPOP_CY`, `TOTHH_CY`: ring totals, so the 3-mile ring includes the 1-mile ring |
 | Occupation Profile rings | `white_collar_pct`, `blue_collar_pct`, `services_pct`. These are the connector's own shares, already in percent and built from the same 22 occupation groups as §Computations (they equal the 22-field sums exactly), so never request or re-sum the `OCC*_CY` fields for this page |
 | Occupation dominant line | `UNEMPRT_CY`, `EMP_CY` |
 | Lede rent-to-income | `MEDCRNT_CY` (1-mile ring) |
 
-If the call is rejected because `fieldNames` or `shadeField` is unknown, the user is on an older VestMap connector with four ring fields. Tell them once that the 1 / 3 / 5-mile page needs the current VestMap connector, and stop.
+An older VestMap connector takes a single `fieldName` limited to four fields and has no `fieldNames` or `shadeField`. If the tool's parameters look like that, or the call rejects `fieldNames` / `shadeField`, build nothing. Tell the user once: "The 1 / 3 / 5-mile page needs the latest VestMap connector. Install it from app.vestmap.com/mcp, then ask again." Then offer the Block / Tract / ZIP page in its place.
 
 ### Radius → computations
 
@@ -472,14 +473,14 @@ If the call is rejected because `fieldNames` or `shadeField` is unknown, the use
 - **KPIs:** `MEDIAN HHI · 1 MILE`, `MEDIAN AGE · 1 MILE`, `RENTER SHARE · 1 MILE` (the mint pop card), each with the default sub pattern and the 1-mile value in the block's place, except that KPI 1 says "U.S." where the default says "national": "{share}% of the ${national} U.S. median." A ring above the national median prints a three-digit share, and the longer wording would wrap to a second line and push the panels over the summary title.
 - **Lede** (≤4 rendered lines; omit any fragment whose inputs are null): "The 1 mile radius around **{street line}** is **{renter share}% renters** with a median age of **{age}**, with **{wc}%** of the employed population working white-collar jobs. The median household income inside that mile of **${HHI}** means its **${rent}** median contract rent is **{rti}%** of gross income {comparator} the 30% of gross income rent burden standard. The 1 mile radius is growing **+{growth}%** a year — **{ratio}×** the national rate." The shrinking and national ≤ 0 forms and the ask-rent override follow §Computations with "The 1 mile radius" as the subject. Write "1 mile" without a hyphen in prose: the page's tabular figures space the hyphen apart.
 - **Occupation Profile:** one section per ring (1 Mile · 3 Mile · 5 Mile). Rings print the three shares as whole percents (half up) and draw their arcs from the unrounded shares, the lede prints white collar at 1dp, and the dominant class and ties follow §Computations. The dominant line reads "Unemployment: {UNEMPRT_CY}% · {employed} employed", and because ring counts run long, `EMP_CY` prints in full below 100,000, as whole thousands from 100,000 (119,362 → "119k", half up) and as "{x.xx}M" from 1,000,000. That keeps the line on one row, which the page height needs.
-- **Summary table** "Radius Summary": the default rows (Median HHI · Median Age · Renter Share · Pop Growth (CAGR) · Avg HH Size) with columns 1 Mile · 3 Mile · 5 Mile · {County} Co. · National. Every non-1-mile cell carries the default delta line against the 1-mile cell.
+- **Summary table** "Radius Summary": the default rows (Median HHI · Median Age · Renter Share · Pop Growth (CAGR) · Avg HH Size) with columns 1 Mile · 3 Mile · 5 Mile · {County} Co. · National, where every non-1-mile cell carries the default delta line against the 1-mile cell. Then two ring-total rows, Population and Households: the three ring cells in full with thousands separators, no delta lines (each ring contains the smaller ones), and the County and National cells left empty.
 - **Source line:** "Source: Esri GeoEnrichment {radiusVintage} · 1 / 3 / 5-mile rings · VestMap GIS". The map phead reads "Median HHI · 1 / 3 / 5 Mile Rings", with "{radiusVintage} GeoEnrichment estimate" on the right.
 
 ### Radius → the ring map
 
 The call's `mapImageUrl` is a 1120×560 JPG of block-group median household income in a five-class blue ramp, with the pin at the centre and rings **1 mi orange · 3 mi blue · 5 mi purple**. It has a baked legend titled "{year} Median Household Income (Esri GeoEnrichment)" in a box spanning x ≈ 678–1105, y ≈ 15–161, and attribution along the bottom right (y > 527). `shadeField` is always `MEDHINC_CY`, so the legend box keeps that size in every market. The map takes no colour or classification parameters; use it as returned. `custom_map_screenshot` and `map_screenshot` do not draw rings, so never substitute them.
 
-- **Crop:** the default `.mapwrap` slot (aspect 1.8 / 1) holding `<img class="mapimg ring">` at `width:160%`, centred like the default map. The panel shows raw x ≈ 210–910, y ≈ 85–475: pin dead centre, the 1-mile ring and in most markets the 3-mile ring in frame, attribution outside. The baked legend's lower-left corner still falls in the frame's top right. The **ring card** (`.rcard`, top right, 35% × 22% of the frame) covers it and carries the ring key. Never shrink the card, reduce the zoom or shift the image.
+- **Crop:** `<div class="mapwrap rw">`, the default slot at aspect 2 / 1 rather than 1.8 (the page needs the height for the two ring-total rows), holding `<img class="mapimg ring">` at `width:160%`, centred like the default map. The panel shows raw x ≈ 210–910, y ≈ 105–455: pin dead centre, the 1-mile ring and most of the 3-mile ring in frame, attribution outside, and the top edge falling between legend rows. The baked legend's lower-left corner still falls in the frame's top right. The **ring card** (`.rcard`, top right, 35% × 22% of the frame) covers it and carries the ring key. Never shrink the card, reduce the zoom or shift the image.
 - **HTML legend:** download the image and read the five legend rows. Write them low→high, rounded to the nearest $1k: `<${b1}k · ${b1}–{b2}k · ${b2}–{b3}k · ${b3}–{b4}k · ${b4}k+`. E.g. `<= 35,000 / 35,000 - 51,184 / 51,184 - 63,320 / 63,320 - 81,546 / 81,546 - 209,673` → `<$35k · $35–51k · $51–63k · $63–82k · $82k+`. Swatches are the baked legend's colours low→high: `#F7FAFF` `#C8DAF0` `#6BAFD6` `#296FAA` `#073265` (the map's fills are semi-transparent, so areas read lighter than their swatches, as on the baked legend). If you cannot view the image, drop the legend title and row and keep the ring card. The default §Maps degenerate check and its `equal-interval` fallback do not apply: the ring map takes no classification parameters, so transcribe its legend as returned.
 - **Ring card colours:** `#D8652F` 1 mile · `#2C82C9` 3 miles · `#7A6BAA` 5 miles.
 - **Errors:** a transport error retries once. A missing map drops the map panel and the growth panel fills the left column. If the data call still fails after its retry, there is no page: say so once.
@@ -499,6 +500,14 @@ Append these rules to the end of the `<style>` block (they do not touch the defa
 /* the dominant label never breaks; a long unemployment line wraps right-aligned */
 .occ .dom .d{ white-space:nowrap; }
 .occ .dom .u{ text-align:right; }
+/* two extra summary rows: a wider map frame, tighter rows and smaller rings keep the page to one sheet (~10px spare) */
+.mapwrap.rw{ aspect-ratio:2/1; }
+.sum th{ padding:4px 6px; }
+.sum td{ padding:3px 6px; }
+.bars .brow{ margin:4px 0; }
+.occ .sec{ padding:0.01in 0 0.03in; }
+.occ .sec + .sec{ padding-top:0.03in; }
+.rg svg{ width:46px; height:46px; }
 ```
 
 The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the default template's, verbatim, with the eyebrow text "Demographics &middot; 1 / 3 / 5 Mile Radius". Everything after the rule is the default body with these values and labels (markup illustration for 511 Campbell St):
@@ -519,7 +528,7 @@ The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the 
     <div class="lcol">
       <div class="panel">
         <div class="phead"><span class="t">Median HHI &middot; 1 / 3 / 5 Mile Rings</span><span class="r">2026 GeoEnrichment estimate</span></div>
-        <div class="mapwrap"><img class="mapimg ring" src="{{RING_MAP_URL}}" alt="Median household income by block group with 1, 3 and 5 mile rings"/>
+        <div class="mapwrap rw"><img class="mapimg ring" src="{{RING_MAP_URL}}" alt="Median household income by block group with 1, 3 and 5 mile rings"/>
           <div class="rcard"><span class="ri"><i style="border-color:#D8652F"></i>1 mile</span><span class="ri"><i style="border-color:#2C82C9"></i>3 miles</span><span class="ri"><i style="border-color:#7A6BAA"></i>5 miles</span></div></div>
         <div class="legt">Median Household Income</div>
         <!-- five .li items low→high: the baked legend's swatches in order, labels transcribed per §Radius → the ring map -->
@@ -583,6 +592,9 @@ The masthead (`.hd` block, lockup and tagline) and `<hr class="rule"/>` are the 
       <tr><td class="m">Avg HH Size</td><td class="blk">1.63</td>
         <td>2.04<span class="d up">&#9650; 0.41</span></td><td>2.17<span class="d up">&#9650; 0.54</span></td>
         <td>2.33<span class="d up">&#9650; 0.70</span></td><td class="nat">2.49<span class="d up">&#9650; 0.86</span></td></tr>
+      <!-- ring totals: no deltas, County and National cells empty -->
+      <tr><td class="m">Population</td><td class="blk">17,625</td><td>82,617</td><td>221,750</td><td></td><td class="nat"></td></tr>
+      <tr><td class="m">Households</td><td class="blk">9,899</td><td>38,392</td><td>99,465</td><td></td><td class="nat"></td></tr>
     </tbody>
   </table>
 
@@ -609,4 +621,4 @@ perl -e 'alarm shift @ARGV; exec @ARGV' 40 \
 
 ## Respond
 
-Print the PDF path and one sentence naming the address. Do not list sections, do not mention any missing data or dropped panel, do not describe the layout.
+Print the PDF path and one sentence naming the address. After a Block / Tract / ZIP page, add one line offering the radius version so the user knows it exists, e.g. "Want this same page at 1 / 3 / 5-mile rings? Just say so." Skip the offer when the page was already the Radius variant. Do not list sections, do not mention any missing data or dropped panel, do not describe the layout.
