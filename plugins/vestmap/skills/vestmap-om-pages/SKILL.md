@@ -1,6 +1,6 @@
 ---
 name: vestmap-om-pages
-description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output). The default output is a single Demographics dashboard page in VestMap's live brand — the address as the page title, a narrative lede, three KPI cards, a five-class block-group income choropleth with a legend, population-growth bars, an Occupation Profile (white-collar / blue-collar / service rings with unemployment at Block, Tract and ZIP), and a Cross-Scale Summary table with per-cell deltas against the block. Named variants: a map-centered layout, a light print theme, a Rental Market page with a contract-rent map, and a 1 / 3 / 5-mile Radius page (only when the user asks for 1/3/5 miles or a radius; Block / Tract / ZIP is the default). Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, brand tokens, and PDF steps; it needs no other file.
+description: Render a property Offering Memorandum (OM) page for any US address as a visual, page-oriented PDF (the default output), with every figure and map from 2026 Esri GeoEnrichment. The default output is a single Demographics dashboard page in VestMap's live brand — the address as the page title, a narrative lede, three KPI cards, a five-class block-group income choropleth with a legend, population-growth bars, an Occupation Profile (white-collar / blue-collar / service rings with unemployment at Block, Tract and ZIP), and a Cross-Scale Summary table with per-cell deltas against the block. Named variants: a map-centered layout, a light print theme, a Rental Market page with a contract-rent map, and a 1 / 3 / 5-mile Radius page (only when the user asks for 1/3/5 miles or a radius; Block / Tract / ZIP is the default). Use when the user asks for an "OM", "one-pager", "investor page", "property page", "marketing page", or a rendered / laid-out visual for a US property. Self-contained — this file carries its own layout, HTML template, brand tokens, and PDF steps; it needs no other file.
 user-invocable: true
 ---
 
@@ -11,7 +11,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 ## Hard rules
 
 - **PDF is the default output.** Write the HTML to a temp file, convert with headless Chrome (see §PDF), print the PDF path. Only output HTML instead if the user says "HTML" / "html only".
-- **Every number traces to a VestMap tool call** (`get_section_data`, `query_gis_field`, `custom_map_screenshot`, `search_real_estate_data`; `get_radius_demographics` for the Radius variant) or to a computation in §Computations over those values. If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
+- **Every number traces to a VestMap tool call** (`get_radius_demographics` for every figure, `custom_map_screenshot` for the map and its legend) or to a computation in §Computations over those values. If you can't name the call that produced a value, it does not go on the page. No inference, no memory, no fabrication.
 - **Missing data disappears — it is never announced.** Null value → drop that cell/segment. Summary-table row with fewer than 2 non-null value cells → drop the row. KPI card whose value is null → drop the card and add class `two` to `.kpis` (the remaining pair keeps the 60 / 40 split so the right card stays flush with the panel below it). Ring whose numerator or base is null → drop that ring. Occupation section (Block / Tract / ZIP) with no rings → drop the section. Panel left with nothing to show → drop the panel (see §Graceful failure for the map panel). The page never contains "N/A", "—" as a placeholder, "data unavailable", tool names, field names, or any note about what was dropped. The chat reply after generation is equally quiet (see §Respond).
 - **Different scales differ — that is normal, never a problem.** Block / Tract / ZIP / County / National cover different areas; report values as-is. Never reconcile or describe a cross-scale difference as an anomaly.
 - **No Tapestry, ever.** Never call `get_section_data("demographics")` for numbers and never put a Tapestry segment/grade/lifestyle label on the page.
@@ -25,9 +25,7 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 
 1. **Parse** the subject address; note its street line (for the lede), city, state and ZIP.
 2. **Acquire data — fire all of this in parallel in one turn** (VestMap is free and unlimited; never warn about volume):
-   - `get_section_data(address, "income")` → `median_household_income` at block/tract/zip/county/national.
-   - `get_section_data(address, "expansion")` → 5-yr population-growth CAGR at block/tract/zip/county/national.
-   - `query_gis_field` batches (≤3 fields each) — the full battery in §Data, at the layers each batch names.
+   - **One `get_radius_demographics` call** (§Data) → every figure on the page, at block / tract / ZIP / county / national.
    - `query_gis_field(address, <County /7>, ["NAME"])` → county name (context line, county column header, county growth bar).
    - **The section map** — one `custom_map_screenshot` call per placed map from the registry in §Maps (default page: Income only; Rental variant adds Rent).
 3. **Compute** the derived values and formulaic sentences per §Computations. Precondition-gate every computation: if a component is null, skip it and its sentence fragment.
@@ -38,38 +36,47 @@ Generate a presentation-ready Offering Memorandum PDF for a single US address. T
 
 ## Data — what fills each element
 
-Layers on `https://demographics5.arcgis.com/arcgis/rest/services/USA_Demographics_and_Boundaries_2024/MapServer`:
+**One `get_radius_demographics` call carries every figure on the page.** It is the same call as the Radius variant, so a run that renders both pages makes it once:
 
-| Scale | Layer | Label |
+```
+address:    <the subject address>
+fieldNames: ["MEDHINC_CY","MEDAGE_CY","RENTER_CY","OWNER_CY","TOTHH_CY","TOTPOP_CY","POPGRWCYFY","AVGHHSZ_CY",
+             "white_collar_pct","blue_collar_pct","services_pct","UNEMPRT_CY","EMP_CY","MEDCRNT_CY"]
+shadeField: "MEDHINC_CY"
+```
+
+Read each field from `fields.<code>.blockTractZip`, which holds the 2026 Esri GeoEnrichment value at each page scale:
+
+| Scale | Key | Label |
 |---|---|---|
-| Block (block group) | `/12` | `BLOCK` (table) · `Block` (bars, occupation) |
-| Tract | `/11` | `TRACT` · `Tract` |
-| ZIP | `/9` | `ZIP {zip}` |
-| County | `/7` | `{COUNTY} CO.` (table; strip a trailing " County" from NAME, uppercase) · `{County} Co.` (bars) |
-| National (country layer) | `/13` | `NATIONAL` · `National` |
+| Block (block group) | `block` | `BLOCK` (table) · `Block` (bars, occupation) |
+| Tract | `tract` | `TRACT` · `Tract` |
+| ZIP | `zip` | `ZIP {zip}` |
+| County | `county` | `{COUNTY} CO.` (table; strip a trailing " County" from NAME, uppercase) · `{County} Co.` (bars) |
+| National | `national` | `NATIONAL` · `National` |
 
-`query_gis_field` battery — every batch ≤3 fields, all batches in parallel:
+On this page ignore `.state`, the `radius` values and the call's `mapImageUrl`: they belong to the Radius variant, and this page's map is the §Maps choropleth. `blockTractZipVintage` is the data year in the footer.
 
-| Batch | Fields | Layers | Feeds |
-|---|---|---|---|
-| Population | `TOTPOP_CY`, `MEDAGE_CY`, `AVGHHSZ_CY` | all five | Median-age KPI · Median Age + Avg HH Size rows |
-| Tenure | `TOTHH_CY`, `RENTER_CY`, `OWNER_CY` | all five | Renter KPI · Renter Share row · lede |
-| Rent | `MEDCRNT_CY`, `MEDVAL_CY`, `MEDHINC_CY` | block `/12` only (all five for the Rental variant) | Lede rent-to-income (`MEDHINC_CY` cross-checks the income section's block value) |
-| Occupation O1 | `OCCMGMT_CY`, `OCCBUS_CY`, `OCCCOMP_CY` | `/12`, `/11`, `/9` | White collar |
-| Occupation O2 | `OCCARCH_CY`, `OCCSSCI_CY`, `OCCSSRV_CY` | `/12`, `/11`, `/9` | White collar |
-| Occupation O3 | `OCCLEGL_CY`, `OCCEDUC_CY`, `OCCENT_CY` | `/12`, `/11`, `/9` | White collar |
-| Occupation O4 | `OCCHTCH_CY`, `OCCSALE_CY`, `OCCADMN_CY` | `/12`, `/11`, `/9` | White collar |
-| Occupation O5 | `OCCHLTH_CY`, `OCCPROT_CY`, `OCCFOOD_CY` | `/12`, `/11`, `/9` | Service |
-| Occupation O6 | `OCCBLDG_CY`, `OCCPERS_CY`, `EMP_CY` | `/12`, `/11`, `/9` | Service · employed base |
-| Occupation O7 | `OCCFARM_CY`, `OCCCONS_CY`, `OCCMAIN_CY` | `/12`, `/11`, `/9` | Blue collar |
-| Occupation O8 | `OCCPROD_CY`, `OCCTRAN_CY`, `UNEMPRT_CY` | `/12`, `/11`, `/9` | Blue collar · unemployment rate |
+**County name.** The payload carries no place names, so `query_gis_field(address, <County /7>, ["NAME"])` supplies the label, where `<County /7>` is `https://demographics5.arcgis.com/arcgis/rest/services/USA_Demographics_and_Boundaries_2024/MapServer/7`. Take only `NAME` from that boundary layer, never a number.
 
-Field facts (validated live):
-- **No aggregate occupation fields exist** on this service (`WHTCLR_CY`, `OCCPROF_CY`, `WHITECOL_CY`, `OCCWHT_CY` etc. all error). The three classes are sums of the 22 `OCC*_CY` fields, which together equal `EMP_CY` exactly (verified: 424 + 60 + 104 = 588). Esri's standard grouping: **white collar** = management, business/financial, computer/math, architecture/engineering, sciences, community/social service, legal, education, arts/entertainment/media, health practitioners/technical, sales, office/admin (O1–O4); **service** = healthcare support, protective service, food preparation, building/grounds, personal care (O5 + `OCCBLDG_CY`, `OCCPERS_CY`); **blue collar** = farming/fishing, construction/extraction, installation/maintenance, production, transportation (O7 + `OCCPROD_CY`, `OCCTRAN_CY`).
-- **`UNEMPRT_CY`** is the unemployment rate in percent (e.g. `1.3`); `EMP_CY` is employed civilians 16+. Both exist at `/12`, `/11` and `/9`.
-- **`MEDRENT_CY` does not exist** — `MEDCRNT_CY` (Median Contract Rent) is the canonical rent field.
-- `/13` is the **country layer** — same field names, national values (e.g. `TOTPOP_CY` ≈ 338M). It backs every `NATIONAL` column cell and the KPI-card national references.
-- **`query_gis_field` skips fields that are missing and names them** ("Skipped N field(s) not present…") while returning the rest; a call whose *every* field is missing errors instead. Keep batches ≤3 fields. If a whole batch errors unexpectedly, re-probe its fields one per call (parallel) and drop only the nulls — never surface the failure.
+| Field(s) | Feeds |
+|---|---|
+| `MEDHINC_CY` | KPI 1 · Median HHI row · lede |
+| `MEDAGE_CY` | KPI 2 · Median Age row · lede |
+| `RENTER_CY`, `OWNER_CY`, `TOTHH_CY` | KPI 3 · Renter Share row · lede |
+| `POPGRWCYFY` | Growth bars · Pop Growth row · lede (the annual 2026–2031 population growth rate in %, the figure the expansion section reports) |
+| `AVGHHSZ_CY` | Avg HH Size row |
+| `white_collar_pct`, `blue_collar_pct`, `services_pct` | Occupation rings · lede white-collar share |
+| `UNEMPRT_CY`, `EMP_CY` | Occupation dominant line |
+| `MEDCRNT_CY` | Lede rent-to-income · the Rental variant |
+| `TOTPOP_CY` | Radius variant only |
+
+Field facts (validated live on connector 1.8.0-beta.10):
+- **The occupation shares are the connector's derived metrics**, already in percent and summing to 100. They equal Esri's 22 `OCC*_CY` groups summed exactly — white collar = management, business/financial, computer/math, architecture/engineering, sciences, community/social service, legal, education, arts/media, health practitioners, sales, office/admin; service = healthcare support, protective service, food preparation, building/grounds, personal care; blue collar = farming, construction, installation/maintenance, production, transportation — so never request or re-sum the `OCC*_CY` fields.
+- **`UNEMPRT_CY`** is the unemployment rate in percent (e.g. `0.6`); `EMP_CY` is employed civilians 16+.
+- **`MEDRENT_CY` does not exist** — `MEDCRNT_CY` (Median Contract Rent) is the canonical rent field. Esri top-codes it at **3,501**, meaning $3,500 or more; in a high-rent area the block, tract and ZIP can all read 3,501 (see §Computations).
+- **Nulls and errors.** A field with no value at a scale comes back null: drop that cell per the sweep rules. An unknown code fails the whole call and names the code: correct the code; never fall back to `query_gis_field` layers for a figure. A transport error (not valid JSON, a timeout, a 502/503) retries once; if the retry fails, there is no page: say so once.
+- **Older connector.** If `get_radius_demographics` takes only a single `fieldName` (no `fieldNames` or `shadeField`), or the call rejects `fieldNames`, build nothing. Tell the user once: "This page needs the latest VestMap connector. Install it from app.vestmap.com/mcp, then ask again."
 
 Element → source map (Demographics page):
 
@@ -77,23 +84,24 @@ Element → source map (Demographics page):
 |---|---|
 | Masthead | Eyebrow "Demographics"; H1 = full address; context "{City}, {ST} · {County Name} · ZIP {zip}"; lockup + tagline (template) |
 | Lede | Formula in §Computations, from: renter share, median age, white collar, block HHI, block rent, rent-to-income, block growth, national growth |
-| KPI 1 `MEDIAN HHI · BLOCK` | Block `median_household_income`; sub: "{round(block/national×100)}% of the ${national} national median." |
+| KPI 1 `MEDIAN HHI · BLOCK` | Block `MEDHINC_CY`; sub: "{round(block/national×100)}% of the ${national} U.S. median." ("U.S.", not "national": a block above the national median prints a three-digit share, and the longer wording wraps to a second line and pushes the page past one sheet) |
 | KPI 2 `MEDIAN AGE · BLOCK` | Block `MEDAGE_CY`; sub: "{|national − block|, 1dp} years {under|over} the national {national}." ("Matches the national {national}." if equal at 1dp) |
 | KPI 3 `RENTER SHARE · BLOCK` (mint pop card) | Block renter share; sub: "{RENTER_CY} of {TOTHH_CY} HH · Nationally {national share}%" |
-| Map panel | Head "Median HHI · Block Groups" / "2024 ACS estimate"; the Income map (§Maps); legend title "Median Household Income" + five swatches with the transcribed class labels |
-| Growth panel | Head "Population Growth · 5-yr CAGR"; expansion CAGR at the five scales as bars, labels Block · Tract · ZIP {zip} · {County} Co. · National, every bar green, widths ∝ value/max (min 2.5% — a negative value renders at the minimum width with its signed label), values signed 2dp. No note line. |
+| Map panel | Head "Median HHI · Block Groups" / "{year} GeoEnrichment estimate" (the year from the map reply's Data year line); the Income map (§Maps) with its key card; legend title "Median Household Income" + five swatches with the transcribed class labels |
+| Growth panel | Head "Population Growth · 5-yr CAGR"; `POPGRWCYFY` at the five scales as bars, labels Block · Tract · ZIP {zip} · {County} Co. · National, every bar green, widths ∝ value/max (min 2.5% — a negative value renders at the minimum width with its signed label), values signed 2dp. No note line. |
 | Occupation panel | Head "Occupation Profile"; three sections — Block, Tract, ZIP {zip} — each: three rings (White Collar · Blue Collar · Service, whole-% inside the ring), then the dominant line "▶ {Dominant class}" in that class's colour and "Unemployment: {UNEMPRT_CY}% · {EMP_CY} employed" |
 | Summary table | Title "Cross-Scale Summary"; rows Median HHI · Median Age · Renter Share · Pop Growth (CAGR) · Avg HH Size; five scale columns; every non-Block cell carries a delta line vs Block (§Computations) |
-| Footer | "Source: Esri Demographics 2024 · ACS 5-yr estimates · VestMap GIS" · "Generated {Month D, YYYY}" |
+| Footer | "Source: Esri GeoEnrichment {blockTractZipVintage} · VestMap GIS" · "Generated {Month D, YYYY}" |
 
 ## Computations
 
 - **Renter share** = `RENTER_CY / (RENTER_CY + OWNER_CY) × 100` per scale (needs both), 1dp.
-- **Occupation classes** (per scale, each needs `EMP_CY` > 0): white collar = Σ(O1–O4 fields) / `EMP_CY` × 100; service = (`OCCHLTH_CY`+`OCCPROT_CY`+`OCCFOOD_CY`+`OCCBLDG_CY`+`OCCPERS_CY`) / `EMP_CY` × 100; blue collar = (`OCCFARM_CY`+`OCCCONS_CY`+`OCCMAIN_CY`+`OCCPROD_CY`+`OCCTRAN_CY`) / `EMP_CY` × 100. A class whose every field was skipped is null (drop its ring); a class with some fields skipped uses the fields returned. Rings print the whole-number percent; the lede prints the block white-collar share at 1dp.
+- **Occupation classes** = `white_collar_pct`, `blue_collar_pct`, `services_pct` per scale, as returned. A null share drops its ring. Rings print the whole-number percent (half up) and draw their arcs from the unrounded share; the lede prints the block white-collar share at 1dp.
 - **Dominant class** = the largest of the three shares in that section; its name ("White Collar" / "Blue Collar" / "Service") and colour (green / blue / clay) drive the ▶ line. Ties go to white collar, then service.
-- **Rent-to-income** = `MEDCRNT_CY × 12 / median_household_income × 100` for the block, 1dp. If the user supplies the property's own asking rent ("ask is $X", "asking rent $X"), the lede uses `X × 12 / block HHI` and says "the **${X}** asking rent" instead of "the block **${rent}** median contract rent".
+- **Rent-to-income** = `MEDCRNT_CY × 12 / MEDHINC_CY × 100` for the block, 1dp. If the user supplies the property's own asking rent ("ask is $X", "asking rent $X"), the lede uses `X × 12 / block HHI` and says "the **${X}** asking rent" instead of "the block **${rent}** median contract rent".
 - **Burden comparator** (lede): let d = rent-to-income − 30. d = 0.0 → "right at"; |d| ≤ 3 → "just slightly {lower|higher} than"; 3 < |d| ≤ 10 → "{lower|higher} than"; |d| > 10 → "well {below|above}". Lower/below when d < 0.
-- **Growth ratio** = block CAGR / national CAGR, 1dp, only when both > 0.
+- **Growth ratio** = block `POPGRWCYFY` / national `POPGRWCYFY`, 1dp, only when both > 0.
+- **Top-coded rent.** A `MEDCRNT_CY` of 3,501 prints as "$3,500+" wherever the rent itself prints (lede, KPI, table cell, dominant line). Figures computed from it are floors: the rent-to-income and share-of-national values computed from it get a "≥" prefix wherever they print ("≥14.5%" in the lede, KPI, ring and table cell), and the lede drops its burden comparator (end the sentence at "…of gross income."). A table delta line is dropped when either of its two values is top-coded or computed from a top-coded rent.
 - **Table deltas** (every non-Block cell, direction from the raw values, magnitude rounded): ▲ (green) when the cell's value > Block, ▼ (clay) when < Block, no delta line when exactly equal. Magnitude by row — Median HHI: `|cell − block| / block × 100` as "{x.x}%"; Median Age: "{x.x} yr"; Renter Share: "{x.x} pt"; Pop Growth: "{x.xx} pt"; Avg HH Size: "{x.xx}". Direction only — never a value judgment.
 - **KPI subtexts** use the exact sentence patterns in the table above; round years and ratios to 1dp, share-of-national to whole %.
 - **Lede pattern** (omit any fragment whose inputs are null, keep it ≤4 rendered lines):
@@ -105,14 +113,16 @@ Element → source map (Demographics page):
 
 ## Maps — one VestMap choropleth per page
 
-Built with **`custom_map_screenshot`** (the arbitrary-field renderer), never `map_screenshot`. It returns a hosted 1120×560 JPG with a legend baked into the top-right, the property pin dead centre, and Esri attribution along the bottom-right.
+Built with **`custom_map_screenshot`** (the arbitrary-field renderer), never `map_screenshot` and never `static_map`. It returns a hosted 1120×560 JPG of block groups shaded from 2026 Esri GeoEnrichment, with a legend baked into the top-right, the property pin dead centre, ZIP boundaries drawn in blue with their labels, and Esri attribution along the bottom-right.
 
 ### Registry
 
 | Page | `service_url` | `field_name` | `field_alias` / `legend_title` | Slot |
 |---|---|---|---|---|
-| Demographics (default) | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDHINC_CY` | `2024 Median Household Income` / `Median HHI` | `{{INCOME_MAP_URL}}` |
-| Rental Market (variant) | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDCRNT_CY` | `2024 Median Contract Rent` / `Median Rent` | `{{RENT_MAP_URL}}` |
+| Demographics (default) | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDHINC_CY` | `Median Household Income` / `Median HHI` | `{{INCOME_MAP_URL}}` |
+| Rental Market (variant) | `…/USA_Demographics_and_Boundaries_2024/MapServer/12` | `MEDCRNT_CY` | `Median Contract Rent` / `Median Rent` | `{{RENT_MAP_URL}}` |
+
+The `service_url` names the block-group layer and `field_name` the Esri code; the connector shades that code from 2026 GeoEnrichment. Its reply carries a **Data year** line, "2026 (Esri GeoEnrichment)": that year goes in the map head ("{year} GeoEnrichment estimate"). Keep `legend_title` exactly as registered: the baked legend is titled "{year} {legend_title} (Esri GeoEnrichment)", and its box grows with the title (see §Crop geometry).
 
 Every call passes exactly:
 
@@ -128,7 +138,7 @@ The five-step mint→forest ramp (low→high) is the page's map signature — it
 ### The HTML legend — transcribe the baked breaks
 
 1. Open the returned image (download it and view it). Read the five legend rows top→bottom (highest class first).
-2. **Degenerate check.** A quantile legend is degenerate when two adjacent breaks are equal, or the bottom class ends at 0. **Exception — the field cap.** Esri top-codes `MEDHINC_CY` at 200,001 (and `MEDCRNT_CY` at 3,500), so in high-income metros the top class reads `200,001 - 200,001`. That is the top-coded class, not a collapse: keep the map, label the top class `$200k+` (rent: `$3,500+`) and the class beneath it `${b3}–200k` — e.g. baked `<= 94,701 / 94,701 - 129,818 / 129,818 - 156,611 / 156,611 - 200,001 / 200,001 - 200,001` → `<$95k · $95–130k · $130–157k · $157–200k · $200k+`. If degenerate otherwise, retry the call once with identical arguments; if still degenerate, switch to `classification_method: "equal-interval"` (breaks are then national and fixed — see the fallback labels below).
+2. **Degenerate check.** A quantile legend is degenerate when it shows fewer than five rows (the renderer merges equal breaks: in high-rent markets many block groups sit at the 3,501 top code and the rent legend can collapse to three rows), when two adjacent breaks are equal, or when the bottom class ends at 0. **Exception — the rent top code.** Esri top-codes `MEDCRNT_CY` at 3,501, so in high-rent metros the top class can read `3,501 - 3,501`. That is the top-coded class, not a collapse: keep the map, label the top class `$3,500+` and the class beneath it `${b3}–3,500`. (2026 median household income is not top-coded at the old 200,001: an Atherton, CA render tops out at 313,420, so income needs no exception.) If degenerate otherwise, retry the call once with identical arguments; if still degenerate, switch to `classification_method: "equal-interval"`. Its breaks are also cut on the rendered extent (the extent's range in fifths, e.g. `<= 32,488 / 32,488 - 64,975 / … / 129,950 - 162,438`), so transcribe them the same way.
 3. Write the five HTML labels **low→high** (the legend row runs left→right, light→dark) from the actual breaks, rounded for legibility — income to the nearest $1k, rent to the nearest $10:
 
 | | first | middle three | last |
@@ -136,14 +146,14 @@ The five-step mint→forest ramp (low→high) is the page's map signature — it
 | Income | `<${b1}k` | `${b1}–{b2}k` · `${b2}–{b3}k` · `${b3}–{b4}k` | `${b4}k+` |
 | Rent | `<${b1}` | `${b1}–{b2}` · … | `${b4}+` |
 
-   e.g. baked `<= 26,954 / 26,954 - 41,096 / 41,096 - 51,670 / 51,670 - 64,046 / 64,046 - 200,001` → `<$27k · $27–41k · $41–52k · $52–64k · $64k+`.
-4. **Equal-interval fallback labels** (deterministic, no transcription): income `<$40k · $40–80k · $80–120k · $120–160k · $160k+`; rent `<$700 · $700–1,400 · $1,400–2,100 · $2,100–2,800 · $2,800+`.
-5. If you have no way to view the image, do not guess the quantile breaks — use the equal-interval call and its fixed labels instead. A legend that does not match its map is worse than a paler map.
+   e.g. baked `<= 28,734 / 28,734 - 41,998 / 41,998 - 54,864 / 54,864 - 69,403 / 69,403 - 162,438` → `<$29k · $29–42k · $42–55k · $55–69k · $69k+`.
+4. If you have no way to view the image, do not guess the breaks: drop the legend title and the legend row and keep the map with its key card. A legend that does not match its map is worse than none.
 
 ### Crop geometry (why the CSS values are what they are)
 
-- **Default panel slot** (`.mapwrap` at aspect `1.8/1` holding `.mapimg` at `width:150%`, centred on both axes): the image is enlarged 1.5× and centred, so the panel shows raw pixels x ≈ 187–933, y ≈ 72–487 of the 1120×560 image — the baked legend (x ≥ 950) sits just outside the right edge, the attribution strip (y > 528) below the bottom edge, and the pin stays dead centre. That is what lets the panel carry the clean HTML legend beneath. The zoom is what hides the legend: never reduce it below 148% (the legend's left edge re-enters the frame); the aspect may sit anywhere between 1.6 and 1.9.
-- **Map Center slot** (`.mapimg.wide`, aspect `2.35/1`, `object-fit:cover; object-position:center top`): full width, cropped only from the bottom, so the baked legend stays visible (it is the legend for that layout) and the pin (y-centre) survives. Never crop a wide slot from the top.
+- **Default panel slot** (`.mapwrap` at aspect `1.8/1` holding `.mapimg` at `width:150%`, centred on both axes): the image is enlarged 1.5× and centred, so the panel shows raw pixels x ≈ 187–933, y ≈ 73–487 of the 1120×560 image. The attribution strip (y > 528) falls below the bottom edge and the pin stays dead centre.
+- **The 2026 baked legend reaches into that frame.** Its box spans x ≈ 784–1106, y ≈ 13–161 with the registry titles (measured on Kansas City and Atherton renders: "Median HHI" starts at x 791, "Median Rent" at 784, and each extra title character moves the left edge about 7px further left). Its lower-left corner, about 20% of the frame's width by 21% of its height, sits in the frame's top right. The **map key card** (`.mkey`, top right, 24% × 25% of the frame, so it covers raw x ≥ 754 and y ≤ 176) hides it and carries the map key: the subject pin and the blue ZIP boundary line. Never shrink the card, reduce the zoom below 150% or shift the image, and keep any `legend_title` in this slot to 12 characters or fewer so the box stays under the card. If the returned image shows no ZIP lines, drop the card's ZIP row and keep the card.
+- **Map Center slot** (`.mapimg.wide`, aspect `2.35/1`, `object-fit:cover; object-position:center top`): full width, cropped only from the bottom, so the baked legend stays visible (it is the legend for that layout, and needs no key card) and the pin (y-centre) survives. Never crop a wide slot from the top.
 
 ### Transient errors are NOT failures — retry once before omitting
 
@@ -158,11 +168,15 @@ If the page's map call fails after the retry: drop the entire map panel (image a
 
 ### Wired but omitted: home value
 
-`MEDVAL_CY` renders with the same registry pattern; offer it only if the user asks for a home-value map, and note nothing on the page either way.
+`MEDVAL_CY` renders with the same registry pattern (`legend_title` `Median Value`); offer it only if the user asks for a home-value map, and note nothing on the page either way.
 
 ### Custom maps on request
 
-If the user names another data layer ("flood risk", "owner-occupancy", "unemployment"): `search_real_estate_data("<ask>")` → pick the **Block Group** (or finest) result → `custom_map_screenshot` with that `layerUrl`/`fieldName`, `class_breaks_count: 5`, `quantile` (same degenerate check), a ramp suited to the meaning (red ramps only for risk), and a finished `legend_title`. Render it as an extra page in this dashboard language (pattern the page on the Rental variant), with its HTML legend transcribed from the returned image's baked legend.
+If the user names another data layer ("owner-occupancy", "unemployment", "flood risk"):
+- **An Esri demographic metric:** pass `derived_metric` when one matches (`owner_occupied_pct`, `renter_occupied_pct`, `white_collar_pct`, `blue_collar_pct`, `services_pct`, `bachelors_plus_pct`, `income_under_50k_pct` … `income_150k_plus_pct`), otherwise `search_real_estate_data("<ask>")` → the **Block Group** result's `layerUrl` as `service_url` and its Esri code as `field_name`. The reply's Data year must read "2026 (Esri GeoEnrichment)"; if it names another year, leave the map out. The page's figures for that metric come from adding its code to the §Data call.
+- **A non-Esri layer** (FEMA flood or hazard risk): the layer `search_real_estate_data` returns, as is.
+
+Call `custom_map_screenshot` with `class_breaks_count: 5`, `quantile` (same degenerate check), a ramp suited to the meaning (red ramps only for risk), and a finished `legend_title` of 12 characters or fewer. Render it as an extra page in this dashboard language (pattern the page on the Rental variant), with its HTML legend transcribed from the returned image's baked legend. If that baked legend reaches past the key card (view the image: its box must start right of x ≈ 754 and end above y ≈ 176), put the map in the Map Center slot on that page instead.
 
 ## Template — the self-contained page
 
@@ -256,6 +270,15 @@ html,body{ background:var(--bg); color:var(--ink);
   transform:translate(-50%,-50%); display:block; }
 .mapimg.wide{ width:100%; aspect-ratio:2.35/1; object-fit:cover; object-position:center top;
   display:block; border-radius:8px; border:1px solid var(--hair); }
+/* map key card: covers the corner of the baked 2026 legend that reaches into the 150% crop */
+.mapwrap .mkey{ position:absolute; top:0; right:0; width:24%; height:25%;
+  background:var(--panel); border-left:1px solid var(--hair); border-bottom:1px solid var(--hair);
+  border-bottom-left-radius:8px; display:flex; flex-direction:column; justify-content:center;
+  gap:4px; padding:0 0.09in; }
+.mkey .ki{ display:flex; align-items:center; gap:6px; font-size:6.6pt; color:var(--muted); white-space:nowrap; }
+.mkey .pin{ width:7px; height:7px; flex:none; margin:0 1.5px; background:var(--ink);
+  border-radius:50% 50% 50% 0; transform:rotate(-45deg); }
+.mkey .zl{ width:10px; flex:none; border-top:2px solid #3D7CC4; }
 .legt{ margin-top:0.08in; font-size:6.8pt; font-weight:600; letter-spacing:0.14em;
   text-transform:uppercase; color:var(--sage); }
 .leg{ display:flex; gap:0.16in; margin-top:0.05in; }
@@ -318,26 +341,27 @@ table.sum{ width:100%; border-collapse:collapse; }
 
   <div class="kpis">
     <div class="kpi"><div class="lbl">Median HHI &middot; Block</div>
-      <div class="val">$55,644</div><div class="sub">70% of the $79,068 national median.</div></div>
+      <div class="val">$67,367</div><div class="sub">78% of the $85,893 U.S. median.</div></div>
     <div class="kpi"><div class="lbl">Median Age &middot; Block</div>
-      <div class="val">40.2</div><div class="sub">0.9 years over the national 39.3.</div></div>
+      <div class="val">42.9</div><div class="sub">3.3 years over the national 39.6.</div></div>
     <div class="kpi pop"><div class="lbl">Renter Share &middot; Block</div>
-      <div class="val">67.2%</div><div class="sub">299 of 445 HH &middot; Nationally 35.6%</div></div>
+      <div class="val">65.5%</div><div class="sub">290 of 443 HH &middot; Nationally 36.0%</div></div>
   </div>
 
   <div class="grid">
     <div class="lcol">
       <div class="panel">
-        <div class="phead"><span class="t">Median HHI &middot; Block Groups</span><span class="r">2024 ACS estimate</span></div>
-        <div class="mapwrap"><img class="mapimg" src="{{INCOME_MAP_URL}}" alt="Median household income by block group"/></div>
+        <div class="phead"><span class="t">Median HHI &middot; Block Groups</span><span class="r">2026 GeoEnrichment estimate</span></div>
+        <div class="mapwrap"><img class="mapimg" src="{{INCOME_MAP_URL}}" alt="Median household income by block group"/>
+          <div class="mkey"><span class="ki"><i class="pin"></i>Subject</span><span class="ki"><i class="zl"></i>ZIP boundary</span></div></div>
         <div class="legt">Median Household Income</div>
         <div class="leg">
           <!-- five .li items low→high; swatches are the registry colours in order, labels transcribed per §Maps -->
-          <div class="li"><span class="sw" style="background:#edf5ef"></span>&lt;$27k</div>
-          <div class="li"><span class="sw" style="background:#b7d9bf"></span>$27&ndash;41k</div>
-          <div class="li"><span class="sw" style="background:#6fb585"></span>$41&ndash;52k</div>
-          <div class="li"><span class="sw" style="background:#2e8b65"></span>$52&ndash;64k</div>
-          <div class="li"><span class="sw" style="background:#1b4d3e"></span>$64k+</div>
+          <div class="li"><span class="sw" style="background:#edf5ef"></span>&lt;$29k</div>
+          <div class="li"><span class="sw" style="background:#b7d9bf"></span>$29&ndash;42k</div>
+          <div class="li"><span class="sw" style="background:#6fb585"></span>$42&ndash;55k</div>
+          <div class="li"><span class="sw" style="background:#2e8b65"></span>$55&ndash;69k</div>
+          <div class="li"><span class="sw" style="background:#1b4d3e"></span>$69k+</div>
         </div>
       </div>
       <div class="panel growth">
@@ -346,8 +370,8 @@ table.sum{ width:100%; border-collapse:collapse; }
           <!-- five .brow rows: Block · Tract · ZIP {zip} · {County} Co. · National
                .bf width = value/max×100 (min 2.5%), .bv = signed value 2dp + % -->
           <div class="brow"><span class="bk">Block</span>
-            <span class="bt"><span class="bf" style="width:63.7%"></span></span>
-            <span class="bv">+1.23%</span></div>
+            <span class="bt"><span class="bf" style="width:9.4%"></span></span>
+            <span class="bv">+0.63%</span></div>
           <!-- … -->
         </div>
       </div>
@@ -363,13 +387,13 @@ table.sum{ width:100%; border-collapse:collapse; }
           <div class="rg"><svg width="52" height="52" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="25" fill="none" stroke="var(--track)" stroke-width="5.5"/>
               <circle cx="32" cy="32" r="25" fill="none" stroke="var(--green)" stroke-width="5.5" stroke-linecap="round"
-                stroke-dasharray="113.3 157.1" transform="rotate(-90 32 32)"/>
-              <text class="pct" x="32" y="32" text-anchor="middle" dominant-baseline="central">72%</text></svg>
+                stroke-dasharray="106.5 157.1" transform="rotate(-90 32 32)"/>
+              <text class="pct" x="32" y="32" text-anchor="middle" dominant-baseline="central">68%</text></svg>
             <div class="rk">White<br/>Collar</div></div>
           <!-- ring 2: var(--blue), "Blue<br/>Collar" · ring 3: var(--clay), "Service" -->
         </div>
         <div class="dom"><span class="d wc">&#9654; White Collar</span>
-          <span class="u">Unemployment: 1.3% &middot; 588 employed</span></div>
+          <span class="u">Unemployment: 0.6% &middot; 633 employed</span></div>
       </div>
       <!-- .sec "Tract" … · .sec "ZIP 64106" … -->
     </div>
@@ -379,14 +403,14 @@ table.sum{ width:100%; border-collapse:collapse; }
   <table class="sum">
     <thead><tr><th>Metric</th><th>Block</th><th>Tract</th><th>ZIP 64106</th><th>Jackson Co.</th><th>National</th></tr></thead>
     <tbody>
-      <tr><td class="m">Median HHI</td><td class="blk">$55,644</td>
-        <td>$78,551<span class="d up">&#9650; 41.2%</span></td><td>$59,458<span class="d up">&#9650; 6.9%</span></td>
-        <td>$64,942<span class="d up">&#9650; 16.7%</span></td><td class="nat">$79,068<span class="d up">&#9650; 42.1%</span></td></tr>
+      <tr><td class="m">Median HHI</td><td class="blk">$67,367</td>
+        <td>$79,272<span class="d up">&#9650; 17.7%</span></td><td>$67,244<span class="d dn">&#9660; 0.2%</span></td>
+        <td>$75,657<span class="d up">&#9650; 12.3%</span></td><td class="nat">$85,893<span class="d up">&#9650; 27.5%</span></td></tr>
       <!-- Median Age ("x.x yr") · Renter Share ("x.x pt") · Pop Growth (CAGR) (signed values, "x.xx pt") · Avg HH Size ("x.xx") follow the same pattern -->
     </tbody>
   </table>
 
-  <div class="ft"><span>Source: Esri Demographics 2024 &middot; ACS 5-yr estimates &middot; VestMap GIS</span><span>Generated {{Month D, YYYY}}</span></div>
+  <div class="ft"><span>Source: Esri GeoEnrichment 2026 &middot; VestMap GIS</span><span>Generated {{Month D, YYYY}}</span></div>
 </div></body></html>
 ```
 
@@ -419,9 +443,9 @@ two files' fill colours.
 
 | Trigger | Variant | Delta from the default template |
 |---|---|---|
-| "map at the center", "map first", "map-centered" | **Map Center** | Drop the lede. Order: `.kpis` → a full-width `.panel` holding `<img class="mapimg wide" …>` under phead "Median HHI · Block Groups" / "Block Group · 2024 ACS estimate" (no HTML legend — the wide crop keeps the baked legend) → a full-width `.panel.occ` whose three `.sec` blocks sit side by side (`style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.14in"` on a wrapper, no `.sec + .sec` rule) → the Growth panel full width → `.sumt` + table → footer. |
+| "map at the center", "map first", "map-centered" | **Map Center** | Drop the lede. Order: `.kpis` → a full-width `.panel` holding `<img class="mapimg wide" …>` under phead "Median HHI · Block Groups" / "Block Group · 2026 GeoEnrichment estimate" (no HTML legend and no key card — the wide crop keeps the baked legend) → a full-width `.panel.occ` whose three `.sec` blocks sit side by side (`style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.14in"` on a wrapper, no `.sec + .sec` rule) → the Growth panel full width → `.sumt` + table → footer. |
 | "light", "print", "light theme" | **Light Print** | `<body class="light">`. Nothing else changes. |
-| "rental page", "rental market page", "add the rental page" | **Rental Market page** | Same skeleton, eyebrow "Rental Market". KPIs: Median Rent · Block (sub "{block/national}% of the ${national} national median."), Renter Share · Block (the mint pop card, same as default), Rent to Income · Block (sub "{comparator} the 30% burden standard."). Map panel: phead "Median Rent · Block Groups" / "2024 ACS estimate", `{{RENT_MAP_URL}}`, legend title "Median Contract Rent" with the rent labels transcribed per §Maps. Growth panel becomes "Renter Share · by Scale" bars (renter share ×5 scales, 1dp, unsigned). Occupation panel becomes "Tenure Profile": per scale (Block · Tract · ZIP) rings Renter (green) · Owner (blue) · Rent to Income (green below 30%, clay at ≥30%), dominant line "▶ Renter" / "▶ Owner" and "Median rent: ${MEDCRNT_CY} · {TOTHH_CY} HH". Summary rows: Median Rent · Renter Share ("x.x pt") · Rent to Income ("x.x pt") · Median HHI · Pop Growth (CAGR). Output as its own page after the default page, or standalone if asked alone. |
+| "rental page", "rental market page", "add the rental page" | **Rental Market page** | Same skeleton, eyebrow "Rental Market". KPIs: Median Rent · Block (sub "{block/national}% of the ${national} U.S. median."), Renter Share · Block (the mint pop card, same as default), Rent to Income · Block (sub "{comparator} the 30% burden standard.", dropped when the block rent is top-coded). Every figure is from the §Data call (`MEDCRNT_CY` at all five scales); a top-coded rent follows §Computations. Map panel: phead "Median Rent · Block Groups" / "{year} GeoEnrichment estimate", `{{RENT_MAP_URL}}` with the same key card as the default map, legend title "Median Contract Rent" with the rent labels transcribed per §Maps. Growth panel becomes "Renter Share · by Scale" bars (renter share ×5 scales, 1dp, unsigned). Occupation panel becomes "Tenure Profile": per scale (Block · Tract · ZIP) rings Renter (green) · Owner (blue) · Rent to Income (green below 30%, clay at ≥30%), dominant line "▶ Renter" / "▶ Owner" and "Median rent: ${MEDCRNT_CY} · {TOTHH_CY} HH". Summary rows: Median Rent · Renter Share ("x.x pt") · Rent to Income ("x.x pt") · Median HHI · Pop Growth (CAGR). Output as its own page after the default page, or standalone if asked alone. |
 | "ask(ing) rent $X" | Ask override | Lede per §Computations. |
 | "1/3/5", "1, 3 and 5 miles", "radius", "rings" | **Radius (1 / 3 / 5 mile)** | The default page at 1 / 3 / 5 miles, with County and National as references: see §Radius variant. Ring data only; never Block / Tract / ZIP values. |
 | any other data/module ask | Custom | Extra summary-table rows for tabular asks; an extra dashboard page (Rental-variant pattern) plus a §Custom-maps map for mappable asks. |
@@ -433,11 +457,11 @@ two files' fill colours.
 **What it carries: only ring data, with County and National as references.**
 - Every figure is a 1-, 3- or 5-mile ring value from `get_radius_demographics`, or the County / National value the same call returns for the same field. Never put a Block, Tract, ZIP or State value on the page, and never fill a ring gap with one.
 - The rings are fixed at 1, 3 and 5 miles. If the user asks for other radii, say once that the rings are 1 / 3 / 5 miles and produce this page.
-- The base `vestmap` skill's chat defaults (search first, `show_map` links, absolute-plus-percent deltas, field-name citations) do not apply to this page.
+- The base `vestmap` skill's chat defaults (the comparison table, `show_map` links, absolute-plus-percent deltas, field-name citations) do not apply to this page.
 
 ### Radius → data (replaces Workflow step 2; both calls in parallel)
 
-- One `get_radius_demographics` call carries every figure and the map:
+- One `get_radius_demographics` call carries every figure and the map. It is the §Data call, unchanged:
 
   ```
   address:    <the subject address>
@@ -470,7 +494,7 @@ An older VestMap connector takes a single `fieldName` limited to four fields and
 
 - **Compute from unrounded values; round only when printing**, half up.
 - **Reference gate:** use the County and National values only when `blockTractZipVintage` equals `radiusVintage`. Otherwise drop the County and National columns and bars, the KPI subs become "{3-mile} at 3 mi · {5-mile} at 5 mi" (HHI as currency, age 1dp, renter share 1dp with %), and the lede's growth sentence ends at "…a year."
-- **KPIs:** `MEDIAN HHI · 1 MILE`, `MEDIAN AGE · 1 MILE`, `RENTER SHARE · 1 MILE` (the mint pop card), each with the default sub pattern and the 1-mile value in the block's place, except that KPI 1 says "U.S." where the default says "national": "{share}% of the ${national} U.S. median." A ring above the national median prints a three-digit share, and the longer wording would wrap to a second line and push the panels over the summary title.
+- **KPIs:** `MEDIAN HHI · 1 MILE`, `MEDIAN AGE · 1 MILE`, `RENTER SHARE · 1 MILE` (the mint pop card), each with the default sub pattern and the 1-mile value in the block's place (KPI 1: "{share}% of the ${national} U.S. median.").
 - **Lede** (≤4 rendered lines; omit any fragment whose inputs are null): "The 1 mile radius around **{street line}** is **{renter share}% renters** with a median age of **{age}**, with **{wc}%** of the employed population working white-collar jobs. The median household income inside that mile of **${HHI}** means its **${rent}** median contract rent is **{rti}%** of gross income {comparator} the 30% of gross income rent burden standard. The 1 mile radius is growing **+{growth}%** a year — **{ratio}×** the national rate." The shrinking and national ≤ 0 forms and the ask-rent override follow §Computations with "The 1 mile radius" as the subject. Write "1 mile" without a hyphen in prose: the page's tabular figures space the hyphen apart.
 - **Occupation Profile:** one section per ring (1 Mile · 3 Mile · 5 Mile). Rings print the three shares as whole percents (half up) and draw their arcs from the unrounded shares, the lede prints white collar at 1dp, and the dominant class and ties follow §Computations. The dominant line reads "Unemployment: {UNEMPRT_CY}% · {employed} employed", and because ring counts run long, `EMP_CY` prints in full below 100,000, as whole thousands from 100,000 (119,362 → "119k", half up) and as "{x.xx}M" from 1,000,000. That keeps the line on one row, which the page height needs.
 - **Summary table** "Radius Summary": the default rows (Median HHI · Median Age · Renter Share · Pop Growth (CAGR) · Avg HH Size) with columns 1 Mile · 3 Mile · 5 Mile · {County} Co. · National, where every non-1-mile cell carries the default delta line against the 1-mile cell. Then two ring-total rows, Population and Households: the three ring cells in full with thousands separators, no delta lines (each ring contains the smaller ones), and the County and National cells left empty.
