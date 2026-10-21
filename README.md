@@ -11,8 +11,8 @@ Offering Memorandum pages, and rental-property pro formas.
   address as a PDF.
 - **`vestmap-market-area-pages`** — Generate the demographic pages of a narrative appraisal report
   (Regional and Market Area Analysis, Employment Analysis and a Demographic Data Detail addenda) for
-  any US address, styled to slot into a USPAP/FIRREA report, with the appraiser's own passages left
-  as highlighted placeholders.
+  any US address, styled to slot into a USPAP/FIRREA report, fully generated from 2026 Esri
+  GeoEnrichment and the FEMA National Flood Hazard Layer, with no placeholders to fill in.
 - **`rental-property-analyzer`** — Turn a rent roll + T12 + loan terms into an investor-grade pro
   forma: an editable Excel model (Current vs. Proforma, NOI, cap rate, DSCR, cash-on-cash, loan
   amortization, multi-year projection) plus a polished PDF report with a KPI dashboard and charts.
